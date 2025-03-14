@@ -7,6 +7,7 @@ import io
 import zipfile
 import time
 import uuid
+from io import BytesIO
 
 #---------------------------------------------------------------------#
 #--- Configurando como se comportara a pagina do streamlit------------#
@@ -69,6 +70,50 @@ def autenticar_usuario(username, password):
             return user_credentials[username]["role"]
         # caso não seja não retorna  nada
     return None
+#---------------------------------------------------------------------#
+#---------------------------------------------------------------------#
+
+
+
+#---------------------------------------------------------------------#
+# Funçao para conversão de DF em arquivo xlsx-------------------------#
+def to_excel(df_pendentes , df_entregues):
+    output = BytesIO()
+    with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
+        workbook = writer.book
+        
+        header_format = workbook.add_format({
+            "bold" : True,
+            "text_wrap" : True,
+            "align" : "center",
+            "valign" : "vcenter",
+            "bg_color" : "#D7E4BC",
+            "border": 1
+        })
+        
+        df_list = [(df_pendentes, "NF_PENDENTES_ENVIO"), (df_entregues , "NF_ENTREGUES")]
+        
+        for df, sheet_name in df_list:
+            if not df.empty:
+                df.to_excel(writer,index=False, sheet_name=sheet_name)
+                worksheet = writer.sheets[sheet_name]
+
+                for idx, col in enumerate(df.columns):
+                    max_len = max(df[col].astype(str).apply(len).max(), len(col))+2
+                    worksheet.set_column(idx,idx, max_len)
+                
+                for col_num, value in enumerate(df.columns):
+                    worksheet.write(0,col_num,value,header_format)
+                    
+                worksheet.add_table(0,0,len(df), len(df.columns) -1 , {
+                    "columns": [{"header": col} for col in df.columns],
+                    "style" : "Table Style Medium 9"
+                })
+                         
+        writer.close()
+        
+    output.seek(0)
+    return output.getvalue()
 #---------------------------------------------------------------------#
 #---------------------------------------------------------------------#
 
@@ -481,7 +526,8 @@ elif role == "rip_servicos":
             # Se existirem dados, exibe-os
             if df is not None and not df.empty:
                 df_cliente_pendentes = df[df["STATUS"] == "Pendente"]
-                st.dataframe(df_cliente_pendentes[["DT_RECEBIMENTO", "N_NF", "PESO", "FORNECEDOR", "CHAVE_NF", "STATUS"]])
+                df_clientes_entregues = df[(df["STATUS"] == "Entregue") | (df["STATUS"] == "Mantovani")]
+                st.dataframe(df_cliente_pendentes[["DT_RECEBIMENTO", "N_NF", "PESO", "FORNECEDOR", "CHAVE_NF", "STATUS"]], use_container_width=True)
                 # st.write("Baixar PDFs das Mercadorias em Galpão:")
                 if not df_cliente_pendentes.empty:
                     # Cria um buffer em memória para o ZIP
@@ -498,13 +544,27 @@ elif role == "rip_servicos":
                     # Posiciona o ponteiro do buffer no início
                     zip_buffer.seek(0)
                     
-                    # Exibe o botão para download do ZIP
-                    st.download_button(
-                        label="📥 Baixar todas as NF disponiveis no Galpão",
-                        data=zip_buffer,
-                        file_name="notas_fiscais_pendentes.zip",
-                        mime="application/zip"
-                    )
+                    col1,col2 = st.columns(2)
+                    with col1:
+                        # Exibe o botão para download do ZIP
+                        st.download_button(
+                            label="📥 Baixar todas as NF disponiveis no Galpão",
+                            data=zip_buffer,
+                            file_name="notas_fiscais_pendentes.zip",
+                            mime="application/zip"
+                        )
+                    with col2:
+                        st.download_button(
+                            label="Baixar Relatório Excel das NF disponiveis no Galpão",
+                            data=to_excel(df_cliente_pendentes,df_clientes_entregues),
+                            file_name="relatorio_notas_bolao.xlsx",
+                            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                        )
+                    
+                    
+                    
+                    
+                    
                 else:
                     st.info("Não há notas fiscais pendentes para baixar.")
             else:
@@ -513,6 +573,6 @@ elif role == "rip_servicos":
                 st.write("Acesse as notas fiscais das cargas já entregues e baixe os PDFs quando necessário.")           
                 df_clientes_entregues = df[(df["STATUS"] == "Entregue") | (df["STATUS"] == "Mantovani")]
                 if df_clientes_entregues is not None and not df_clientes_entregues.empty:
-                    st.dataframe(df_clientes_entregues)
+                    st.dataframe(df_clientes_entregues, use_container_width=True)
                 else:
                     st.info("📢 Nenhuma carga entregue registrada até o momento.")  
