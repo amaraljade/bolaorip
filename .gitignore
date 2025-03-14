@@ -1,1 +1,8 @@
 .streamlit/secrets.toml
+
+# Ignorar arquivos do macOS
+.DS_Store
+
+# Ignorar cache do Python
+__pycache__/
+*.pyc
