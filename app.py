@@ -5,208 +5,287 @@ import pandas as pd
 import datetime
 import io
 import zipfile
+import time
+import uuid
 
-# ---------------------------
-# Personalizando o streamlit
-# ---------------------------
+#---------------------------------------------------------------------#
+#--- Configurando como se comportara a pagina do streamlit------------#
 st.set_page_config(
+    # Titulo da pagina a ser exibido no navegador
     page_title="Rip Serviços Industriais",
+    # icone da pagina a ser exibido no navegador
     page_icon="📦",
+    # modo de vizulização das informações na pagina
     layout="wide",
+    # inicializar a pagina com o siderbar expandido
     initial_sidebar_state="expanded",
+    # itens do menu para pedir ajuda ou suporte e apresentação do projeto
     menu_items={
     'Get Help': 'https://www.logbr.net/ajuda',
     'Report a bug': 'https://www.logbr.net/suporte',
     'About': "# LOGBR - Gestão de Transportes\n\nA plataforma eficiente para monitoramento e controle de cargas armazenadas e entregues. 🚛📦"
 }
-
-
 )
+#---------------------------------------------------------------------#
+#---------------------------------------------------------------------#
 
+
+
+#---------------------------------------------------------------------#
+#---Definindo as credenciais atraves do screts------------------------#
 user_credentials = st.secrets["users"]
+#---------------------------------------------------------------------#
+#---------------------------------------------------------------------#
 
 
-# ---------------------------
-# Função para conectar ao banco
-# ---------------------------
+
+#---------------------------------------------------------------------#
+# Função para conectar ao banco---------------------------------------#
 def get_db_connection():
     # Conecta ao banco de dados SQLite criado anteriormente
     conn = sqlite3.connect('notas_bolao.db')
     return conn
-
-# ---------------------------
-# Dicionário simples com usuários e senhas
-# ---------------------------
-# users = {
-#     "admin": {"password": "admin123", "role": "admin"},
-#     "rip_servicos": {"password": "rip", "role": "rip_servicos"}
-# }
+#---------------------------------------------------------------------#
+#---------------------------------------------------------------------#
 
 
+
+#---------------------------------------------------------------------#
+# Caminho onde está o logo--------------------------------------------#
 logo = "/Users/jadeamaral/Library/Mobile Documents/com~apple~CloudDocs/EU/CURSO - CIENTISTA DE DADOS/repos/bolao_rip/log.png"
+#---------------------------------------------------------------------#
+#---------------------------------------------------------------------#
 
 
-# ---------------------------
-# Função de Login
-# ---------------------------
-# def login():
-#     st.sidebar.title("Login")
-#     st.logo(logo,size="large")
-#     username = st.sidebar.text_input("Usuário")
-#     password = st.sidebar.text_input("Senha", type="password")
-#     if st.sidebar.button("Entrar"):
-#         if username in users and password == users[username]["password"]:
-#             st.session_state['logged_in'] = True
-#             st.session_state['username'] = username
-#             st.session_state['role'] = users[username]["role"]
-#             st.sidebar.success("Login realizado com sucesso!")
-#         else:
-#             st.sidebar.error("Usuário ou senha incorretos")
 
-# # ---------------------------
-# # Verificação do estado do login
-# # ---------------------------
-# if 'logged_in' not in st.session_state:
-#     st.session_state['logged_in'] = False
-    
-# if 'role' not in st.session_state:
-#     st.session_state['role'] = None    
-
-
-# # Se o usuário ainda não estiver logado, exibe o login e interrompe o restante do app
-# if not st.session_state['logged_in']:
-#     login()
-#     # st.stop()
-
+#---------------------------------------------------------------------#
+# Funçao de autenticaçao do usuario-----------------------------------#
 def autenticar_usuario(username, password):
+    # se o user informado constar nas credenciais definidas anteriormente
     if username in user_credentials:
+        # verifica se a senha é a senha do usuario nas credenciais
         if password == user_credentials[username]["password"]:
+            # se for retorna o role do usuario
             return user_credentials[username]["role"]
+        # caso não seja não retorna  nada
     return None
-
-# st.sidebar.title("Login")
-# st.logo(logo,size="large")
-# username = st.sidebar.text_input("Usuário")
-# password = st.sidebar.text_input("Senha", type="password")
-# if st.sidebar.button("Entrar"):
-#     role = autenticar_usuario(username, password)
-#     if role:
-#         st.success("Login realizado com sucesso!")
-#         st.session_state['logged_in'] = True
-#         st.session_state['username'] = username
-#         st.session_state['role'] = role
-#     else:
-#         st.error("Usuário ou senha incorretos")
+#---------------------------------------------------------------------#
+#---------------------------------------------------------------------#
 
 
-# ---------------------------
-# Inicialização do Session State
-# ---------------------------
+
+#---------------------------------------------------------------------#
+# Funçao para limpar os campos do formulario -------------------------#
+def limpar_campos():
+    for key in ["n_nf", "peso", "fornecedor", "chave_nf", "status"]:
+        if key in st.session_state:
+                del st.session_state[key]
+    
+    st.session_state["pdf_file"] = str(uuid.uuid4())
+    st.rerun() 
+#---------------------------------------------------------------------#
+#---------------------------------------------------------------------#
+
+
+
+#---------------------------------------------------------------------#
+# Inicialização do Session State--------------------------------------#
+# Definimos o Session_state para armazenar o estado de logado ou não e definir valores as variaveis
+# Se logged_ind não estivr no session_state
 if "logged_in" not in st.session_state:
+    # definir como logged_ind - Falso
     st.session_state["logged_in"] = False
+# se não possuir "role" no session_state
 if "role" not in st.session_state:
+    # definir role como non
     st.session_state["role"] = None
+# se não tiver username no session_state
 if "username" not in st.session_state:
+    # defirnir username como vazio
     st.session_state["username"] = ""
+#---------------------------------------------------------------------#
+#---------------------------------------------------------------------#
 
-# ---------------------------
-# Exibe o Login se não estiver logado
-# ---------------------------
+
+
+#---------------------------------------------------------------------#
+# Sistema de Login----------------------------------------------------#
+# se o session_state de login for falso
 if not st.session_state["logged_in"]:
+    # Abrir a Siderbar com o titulo
     st.sidebar.title("Login")
+    # logo da sidebar
     st.logo(logo, size="large")
+    # inserir input de username ao usuario
     username = st.sidebar.text_input("Usuário")
+    # inserir input de senha ao usuario
     password = st.sidebar.text_input("Senha", type="password")
-
+    # se o botão entrar for clicado (true)
     if st.sidebar.button("Entrar"):
+        # armazeno em role o retorno de usarname e senha que serão retornados da função que autentica o usuario
         role = autenticar_usuario(username, password)
+        # se tivermos um role
         if role:
-            # st.success("Login realizado com sucesso!")
+            # exibo a mensagem na sidebar de que o loguin foi realizado com sucesso
+            st.sidebar.success("Login realizado com sucesso!")
+            # dou um tempo de 0.3 segundos para a mensage seguir sendo exibida
+            time.sleep(0.3)
+            # troco o session_state de logged_in para verdadeiro
             st.session_state['logged_in'] = True
+            # passo para o session_state o username autenticado e informado pelo usuario
             st.session_state['username'] = username
+            # passo para o session_state o role as informações de usarname e senha
             st.session_state['role'] = role
+            # atualizo a pagina
             st.rerun()
+        # caso não tenha um role por conta do erro de autenticação
         else:
+            # exibo a mensagem de erro
             st.error("Usuário ou senha incorretos")
-
     # Impede que o resto do código rode até que o login seja feito
     st.stop()
+#---------------------------------------------------------------------#
+#---------------------------------------------------------------------#
 
 
-# ---------------------------
-# Interface de acordo com o tipo de usuário
-# ---------------------------
+
+#---------------------------------------------------------------------#
+# Interface de acordo com o tipo de usuário---------------------------#
+# Pega o session_state que havia sido armazenado ao autenticar o usuario, sendo o role o username
 role = st.session_state['role']
+#---------------------------------------------------------------------#
+#---------------------------------------------------------------------#
 
-# ---- Modo Admin: Inserir novas notas fiscais ----
+
+
+
+#---------------------------------------------------------------------#
+# LOGIN - MODO ADMINISTRADOR------------------------------------------#
 if role == "admin":
+    # exiba o titulo de painel administrativo
     st.title("Painel Administrativo")
-    # st.write("Bem-vindo, admin! Aqui você pode inserir novas notas fiscais.")
+    # insira o logo 
+    st.logo(logo,size="large") 
+    # adicione um bem vindo na sidebar
+    st.sidebar.markdown("## Bem-vindo!")
+    # adicione o boão de sair e caso ele seja clicado
+    if st.sidebar.button("Sair"):
+            # mude a session_state de login para falso
+            st.session_state["logged_in"] = False
+            # mudando a session_state do role para nada
+            st.session_state["role"] = None
+            # e do usuario também
+            st.session_state["username"] = ""
+            # atualizamos a página
+            st.rerun()
+#---------------------------------------------------------------------#
+#---------------------------------------------------------------------#    
+    
+    
+#---------------------------------------------------------------------#
+# ABAS - MODO ADMINISTRADOR-------------------------------------------#  
+    # Crio 3 abas
     tab1, tab2, tab3 = st.tabs(["Cadastro", "Atualização", "Visão Cliente"])
-    
-    # Verifica se as chaves já existem em st.session_state; se não, cria com valores padrão
+#---------------------------------------------------------------------#
+#---------------------------------------------------------------------#
+
+    # definindo dat aatual para usar no session_state de data de recebimento
+    hoje = datetime.datetime.today()
+
+#---------------------------------------------------------------------#
+# DEFINIÇÃO SESSION_STATE - MODO ADMINISTRADOR------------------------# 
+
+    # verifico se data de recebimento já foi estanciada
     if "dt_recebimento" not in st.session_state:
-        st.session_state["dt_recebimento"] = datetime.today()
-
+        # se não for estancio com a data atual
+        st.session_state.setdefault("dt_recebimento", hoje)
+    # verifico se a nota fiscal foi estanciada
     if "n_nf" not in st.session_state:
+        # se nao foi estancio como vazio
         st.session_state["n_nf"] = ""
-
+    # verifico se peso foi estanciado
     if "peso" not in st.session_state:
+        # se nao foi estancio com 0
         st.session_state["peso"] = 0
-
+    # vejo se fornecedor foi estanciado
     if "fornecedor" not in st.session_state:
+        # se não foi estancio com vazio
         st.session_state["fornecedor"] = ""
-
+    # verifico se a chave da nota foi estanciada
     if "chave_nf" not in st.session_state:
+        # se não foi estancio com vazio
         st.session_state["chave_nf"] = ""
-
+    # verifico se o status foi estanciado
     if "status" not in st.session_state:
+        # se não foi estanciado estancio como pendente
         st.session_state["status"] = "Pendente"
-
+    # verifico se pdf foi estanciado
     if "pdf_file" not in st.session_state:
-        st.session_state["pdf_file"] = None
-        
+        # se não foi estancio com uma chave aleatoria para poder limpar o campo depois
+        st.session_state["pdf_file"] = str(uuid.uuid4())
+#---------------------------------------------------------------------#
+#---------------------------------------------------------------------#        
     
-    
-    
+#---------------------------------------------------------------------#
+# TELA CADASTRO - MODO ADMINISTRADOR----------------------------------# 
+    # Na primeira aba    
     with tab1:
-        # Formulário para inserir uma nova nota fiscal
+        #---------------------------------------------------------------------#
+        # crio um formulario chamado form_inserir
         with st.form("form_inserir"):
-            # Campo para escolher a data; o valor padrão é a data atual
-            dt_recebimento = st.date_input("Data de Recebimento", value=datetime.today())
-            n_nf = st.text_input("Número da Nota Fiscal")
-            peso = st.number_input("Peso da Nota Fiscal")
-            fornecedor = st.text_input("Fornecedor")
-            chave_nf = st.text_input("Chave da Nota Fiscal")
-            status = st.selectbox("Status", ["Pendente", "Processada", "Cancelada"])
-            # Campo para upload do arquivo PDF
-            pdf_file = st.file_uploader("Upload do PDF", type="pdf")
+            # crio o imput de data definindo a chave da estancia
+            dt_recebimento = st.date_input("Data de Recebimento", key="dt_recebimento")
+            # crio o input de nota fiscal , definindo a chave da estancia
+            n_nf = st.text_input("Número da Nota Fiscal", key="n_nf")
+            # crio o input de peso , definindo a chave da estancia
+            peso = st.number_input("Peso da Nota Fiscal", key="peso")
+            # crio o input de fornecedor , definindo a chave da estancia
+            fornecedor = st.text_input("Fornecedor",key="fornecedor" )
+            # crio o input de chave nota fiscal , definindo a chave da estancia
+            chave_nf = st.text_input("Chave da Nota Fiscal", key="chave_nf")
+            # crio o input de status , definindo a chave da estancia
+            status = st.selectbox("Status", ["Pendente", "Cancelada"], key="status")
+            # crio o campo de uploade de pdf e defino a chave dele como a session_state pdf que foi definida anteriormente como chave aleatoria
+            pdf_file = st.file_uploader("Upload do PDF", type="pdf", key=st.session_state["pdf_file"])
+            # crio o botão de envio do formulario
             submit = st.form_submit_button("Inserir Nota Fiscal")
-            # 
-
-
-            # Quando o formulário é submetido...
+        #---------------------------------------------------------------------#
+        
+        
+        
+            #-----------------------------------------------------------------#
+            # Envio informações formulario------------------------------------#
             if submit:
-                # Se um PDF foi enviado, salvamos o arquivo na pasta "pdfs"
+                # se um pdf foi inserido no formulario
                 if pdf_file is not None:
+                    # definimos o nome da pasta
                     pdf_dir = "pdfs"
-                    # Cria a pasta "pdfs" se ela não existir
+                    # caso ela não exista criamos ela utilizando o nome definido
                     if not os.path.exists(pdf_dir):
+                        # criando a pasta
                         os.makedirs(pdf_dir)
-                    
+                    # definindo a data de recebimento formatada para salvar no nome do pdf
                     dt_recebimento_str = dt_recebimento.strftime("%Y%m%d")
+                    # definindo o nome do fornecedor sem espaços e em caps lock para salvar o nome do pdf
                     fornecedor_str = fornecedor.replace(" ", "_").upper()
-                    
-                    
+                    # criando a variavel que conterá a frase com o nome do pdf
                     pdf_filename = f"{dt_recebimento_str}_{n_nf}_{fornecedor_str}.pdf"
+                    # criando o caminho completo 
                     pdf_path = os.path.join(pdf_dir, pdf_filename)
-                    # Salva o arquivo
+                    # abre o caminho
                     with open(pdf_path, "wb") as f:
+                        # escreve o conteudo do buffer na pasta
                         f.write(pdf_file.getbuffer())
+                # caso não tenha sido uplodado pdf 
                 else:
+                    # definimos o caminho como vazio
                     pdf_path = ""
+                #-----------------------------------------------------------------#
                 
-                # Insere os dados no banco de dados
+                
+                
+                #-----------------------------------------------------------------#
+                # Insere os dados no banco de dados-------------------------------#
                 conn = get_db_connection()
                 cursor = conn.cursor()
                 cursor.execute("""
@@ -215,7 +294,22 @@ if role == "admin":
                 """, (dt_recebimento.strftime("%Y-%m-%d"), n_nf, peso ,fornecedor, chave_nf, status, pdf_path))
                 conn.commit()
                 conn.close()
+                #-----------------------------------------------------------------#
+                
+                
+                
+                #-----------------------------------------------------------------#
+                #Envio de mensagem de suceeso-------------------------------------#
                 st.success("Nota fiscal inserida com sucesso!")
+                # limpeza dos campos
+                limpar_campos()
+                # atualização da tela
+                st.rerun()
+                #-----------------------------------------------------------------#
+                
+                
+                
+                
         with tab2:
             st.write("Aqui você pode atualizar os status das notas e incluir as datas de envio")
             
@@ -223,10 +317,10 @@ if role == "admin":
             conn = get_db_connection()
             # Selecionando todas as informações da tabela e convertendo em dataframe
             df = pd.read_sql_query("SELECT * FROM notas_bolao", conn)
-            # fechando conexão
+            
             conn.close()
             
-            # verificando se há informações no banco de dados
+            
             if df.empty:
                 st.info("Não há notas cadastradas para atualizar.")
             else:
@@ -245,8 +339,8 @@ if role == "admin":
                 
                 with st.form("form_enviar_pendentes"):
                     st.write("Atualização de Envio:")
-                    data_envio = st.date_input("Data Envio", value=datetime.today())
-                    novo_status = st.selectbox("Novo Status:", ["Entregue", "Cancelado"])
+                    data_envio = st.date_input("Data Envio", value=datetime.datetime.today())
+                    novo_status = st.selectbox("Novo Status:", ["Entregue", "Mantovani","Cancelado"])
                     confirmar = st.form_submit_button("Enviar todas pendentes")
                     
                     if confirmar:
@@ -260,15 +354,17 @@ if role == "admin":
                         conn.commit()
                         conn.close()
                         st.success("Todas as notas pendentes foram atualizadas")
+                        # st.rerun()
             else:
                     st.info("Não há notas pendentes no momento")
         with tab3:
+            # st.rerun()
             tab1,tab2 = st.tabs(["Armazenadas", "Enviadas"])
             with tab1:
                 st.title("Painel do Cliente")
                 st.write("Bem-vindo! Aqui você pode consultar as notas fiscais armazenadas no Galpão e baixar os PDFs.")
 
-                # Conecta ao banco de dados e lê os registros em um DataFrame do pandas
+                
                 conn = get_db_connection()
                 try:
                     df = pd.read_sql_query("SELECT * FROM notas_bolao", conn)
@@ -315,7 +411,7 @@ if role == "admin":
                     st.info("Nenhuma nota fiscal encontrada no sistema.")   
             with tab2:
                 st.write("Aqui você pode consultar as notas fiscais entregues e baixar os PDFs.")           
-                df_clientes_entregues = df[df["STATUS"] == "Entregue"]
+                df_clientes_entregues = df[(df["STATUS"] == "Entregue") | (df["STATUS"] == "Mantovani")]
                 if df_clientes_entregues is not None and not df_clientes_entregues.empty:
                     st.dataframe(df_clientes_entregues)
                 else:
@@ -356,11 +452,11 @@ elif role == "rip_servicos":
         tab1,tab2 = st.tabs(["📦  Armazenadas", "✅ Enviadas"])
         with tab1:
             # st.write("Bem-vindo! Aqui você pode consultar as notas fiscais armazenadas no Galpão e baixar os PDFs.")
-            st.markdown("📂 Lista de mercadorias armazenadas no galpão e suas respectivas notas fiscais disponíveis para download.")
-            st.divider()
+            
+            # st.divider()
             st.header("Filtros:")
             # with st.expander("Filtros:"):
-            col1,col2,col3 = st.columns(3)   
+            col1,col2,col3 = st.columns(3)
             with col1:
                 dt_recebimento_select = st.multiselect("Data Recebimento", ["11/03/2025", "07/03/2025", "06/03/2025", "28/02/2025"])
                 
@@ -370,6 +466,7 @@ elif role == "rip_servicos":
                 # st.date_input("Data Recebimento", value=datetime.date(2019, 7, 6))
                 nf_select = st.selectbox("NF'S:", ["-",1,2,3,4])
             st.divider()
+            st.markdown("📂 Lista de mercadorias armazenadas no galpão e suas respectivas notas fiscais disponíveis para download.")   
 
             # Conecta ao banco de dados e lê os registros em um DataFrame do pandas
             conn = get_db_connection()
@@ -414,7 +511,7 @@ elif role == "rip_servicos":
                     st.info("Nenhuma nota fiscal encontrada no sistema.")   
             with tab2:
                 st.write("Acesse as notas fiscais das cargas já entregues e baixe os PDFs quando necessário.")           
-                df_clientes_entregues = df[df["STATUS"] == "Entregue"]
+                df_clientes_entregues = df[(df["STATUS"] == "Entregue") | (df["STATUS"] == "Mantovani")]
                 if df_clientes_entregues is not None and not df_clientes_entregues.empty:
                     st.dataframe(df_clientes_entregues)
                 else:
