@@ -601,9 +601,36 @@ elif role == "rip_servicos":
                     st.info("Nenhuma nota fiscal encontrada no sistema.")   
             with tab2:
                 st.write("Acesse as notas fiscais das cargas já entregues e baixe os PDFs quando necessário.")           
-                df_clientes_entregues = df[(df["STATUS"] == "Entregue") | (df["STATUS"] == "Mantovani")]
-                if df_clientes_entregues is not None and not df_clientes_entregues.empty:
+                st.header("Filtros:")
+                col1,col2,col3 = st.columns(3)
+                with col1:
+                    df_filtrado_entregues = df_clientes_entregues.copy()
+                    
+                    datas_unicas = df_filtrado_entregues["DT_RECEBIMENTO"].unique().tolist()
+                    dt_recebimento_select = st.multiselect("Data Recebimento", datas_unicas)
+                if dt_recebimento_select:
+                        df_filtrado_entregues = df_filtrado_entregues[df_filtrado_entregues["DT_RECEBIMENTO"].isin(dt_recebimento_select)]
+                with col2:
+                    fornecedor_unicos = ["-"] + df_filtrado_entregues["FORNECEDOR"].unique().tolist()
+                    fornecedor_select = st.selectbox("Fornecedor:", fornecedor_unicos)
+                if fornecedor_select:
+                    if "-" in fornecedor_select:
+                        pass
+                    else:
+                        df_filtrado_entregues = df_filtrado_entregues[df_filtrado_entregues["FORNECEDOR"] == fornecedor_select]
+                with col3:
+                    nf_unicas = ["-"] + df_filtrado_entregues["N_NF"].unique().tolist()
+                    nf_select = st.selectbox("NF'S:", nf_unicas)
+                if nf_select:
+                    if "-" in nf_select:
+                        pass
+                    else:
+                      df_filtrado_entregues = df_filtrado_entregues[df_filtrado_entregues["N_NF"] == nf_select]  
+                 
+                df_filtrado_entregues = df_filtrado_entregues.set_index("DT_RECEBIMENTO")      
+
+                if df_filtrado_entregues is not None and not df_filtrado_entregues.empty:
                     # df_clientes_entregues = df_clientes_entregues.set_index("DT_RECEBIMENTO")
-                    st.dataframe(df_clientes_entregues, use_container_width=True)
+                    st.dataframe(df_filtrado_entregues, use_container_width=True)
                 else:
                     st.info("📢 Nenhuma carga entregue registrada até o momento.")  
