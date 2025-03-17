@@ -526,6 +526,7 @@ elif role == "rip_servicos":
                 df_filtrado_pendentes = df_cliente_pendentes.copy()
                 
                 
+                
                 # data_opcoes = ["-"] + datas
                 # data_default = datas
                 
@@ -554,8 +555,9 @@ elif role == "rip_servicos":
                         pass
                     else:
                       df_filtrado_pendentes = df_filtrado_pendentes[df_filtrado_pendentes["N_NF"] == nf_select]  
-                      
-                st.dataframe(df_filtrado_pendentes[["DT_RECEBIMENTO", "N_NF", "PESO", "FORNECEDOR", "CHAVE_NF", "STATUS"]], use_container_width=True)
+                 
+                df_filtrado_pendentes = df_filtrado_pendentes.set_index("DT_RECEBIMENTO")      
+                st.dataframe(df_filtrado_pendentes[[ "N_NF", "FORNECEDOR", "PESO", "CHAVE_NF", "STATUS"]], use_container_width=True)
 
                 if not df_cliente_pendentes.empty:
                     # Cria um buffer em memória para o ZIP
@@ -601,6 +603,7 @@ elif role == "rip_servicos":
                 st.write("Acesse as notas fiscais das cargas já entregues e baixe os PDFs quando necessário.")           
                 df_clientes_entregues = df[(df["STATUS"] == "Entregue") | (df["STATUS"] == "Mantovani")]
                 if df_clientes_entregues is not None and not df_clientes_entregues.empty:
+                    # df_clientes_entregues = df_clientes_entregues.set_index("DT_RECEBIMENTO")
                     st.dataframe(df_clientes_entregues, use_container_width=True)
                 else:
                     st.info("📢 Nenhuma carga entregue registrada até o momento.")  
