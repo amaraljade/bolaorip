@@ -77,27 +77,37 @@ def autenticar_usuario(username, password):
 
 #---------------------------------------------------------------------#
 # Funçao para conversão de DF em arquivo xlsx-------------------------#
+# crio a função que recebe 2 dataframes
 def to_excel(df_pendentes , df_entregues):
+    # criamos um buffer me memoria, salvando o arquivo na ram e não no computador permitindo ser baixado depois 
+    # usei o bytesIo por conta do arquivo temporário do streamlit
     output = BytesIO()
+    # criamos um escritor de arquivos pfds usando o excelwriter que escreverá dados no buffer e apelidamos de writer
     with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
+        # armazenamos em workbok o objeto de workbook do excel
         workbook = writer.book
-        
+        # formatamos o cabeçalho 
         header_format = workbook.add_format({
-            "bold" : True,
-            "text_wrap" : True,
-            "align" : "center",
-            "valign" : "vcenter",
-            "bg_color" : "#D7E4BC",
-            "border": 1
+            "bold" : True, # negrito
+            "text_wrap" : True, #Quebra de texto automatica
+            "align" : "center", # alinha o texto horizontalmente
+            "valign" : "vcenter", #Alinha o texto verticalmente 
+            "bg_color" : "#D7E4BC", # define cor de fundo
+            "border": 1 # borda 
         })
         
+        # crio uma lista que contem o dataframe e o nome da guia que será salva no excel
         df_list = [(df_pendentes, "NF_PENDENTES_ENVIO"), (df_entregues , "NF_ENTREGUES")]
         
+        # para cada dataframe e aba dentro da listra de dataframes
         for df, sheet_name in df_list:
+            # verifique se o dataframe não é vazio
             if not df.empty:
-                df.to_excel(writer,index=False, sheet_name=sheet_name)
+                # se não for transforme em excel utilizando o escritor de arquivos, considere o index falso e o nome da aba será a sheet_name
+                df.to_excel(writer, sheet_name=sheet_name,index=False)
+                #acessamos a aba recem criada e armazenaos em worksheet permitindo formatação
                 worksheet = writer.sheets[sheet_name]
-
+                # 
                 for idx, col in enumerate(df.columns):
                     max_len = max(df[col].astype(str).apply(len).max(), len(col))+2
                     worksheet.set_column(idx,idx, max_len)
@@ -110,7 +120,7 @@ def to_excel(df_pendentes , df_entregues):
                     "style" : "Table Style Medium 9"
                 })
                          
-        writer.close()
+        # writer.close()
         
     output.seek(0)
     return output.getvalue()
@@ -496,21 +506,6 @@ elif role == "rip_servicos":
         st.title("Painel do Cliente")
         tab1,tab2 = st.tabs(["📦  Armazenadas", "✅ Enviadas"])
         with tab1:
-            # st.write("Bem-vindo! Aqui você pode consultar as notas fiscais armazenadas no Galpão e baixar os PDFs.")
-            
-            # st.divider()
-            st.header("Filtros:")
-            # with st.expander("Filtros:"):
-            col1,col2,col3 = st.columns(3)
-            with col1:
-                dt_recebimento_select = st.multiselect("Data Recebimento", ["11/03/2025", "07/03/2025", "06/03/2025", "28/02/2025"])
-                
-            with col2:
-                fornecedor_select = st.selectbox("Fornecedor:", ["-","INDUSTRIA DE PECAS","ARGONSOLDAS", "APARECIDA DE MAGDALA","BALASKA"])
-            with col3:
-                # st.date_input("Data Recebimento", value=datetime.date(2019, 7, 6))
-                nf_select = st.selectbox("NF'S:", ["-",1,2,3,4])
-            st.divider()
             st.markdown("📂 Lista de mercadorias armazenadas no galpão e suas respectivas notas fiscais disponíveis para download.")   
 
             # Conecta ao banco de dados e lê os registros em um DataFrame do pandas
@@ -527,8 +522,41 @@ elif role == "rip_servicos":
             if df is not None and not df.empty:
                 df_cliente_pendentes = df[df["STATUS"] == "Pendente"]
                 df_clientes_entregues = df[(df["STATUS"] == "Entregue") | (df["STATUS"] == "Mantovani")]
-                st.dataframe(df_cliente_pendentes[["DT_RECEBIMENTO", "N_NF", "PESO", "FORNECEDOR", "CHAVE_NF", "STATUS"]], use_container_width=True)
-                # st.write("Baixar PDFs das Mercadorias em Galpão:")
+                
+                df_filtrado_pendentes = df_cliente_pendentes.copy()
+                
+                
+                # data_opcoes = ["-"] + datas
+                # data_default = datas
+                
+                
+                st.header("Filtros:")
+                col1,col2,col3 = st.columns(3)
+                with col1:
+                    datas_unicas = df_filtrado_pendentes["DT_RECEBIMENTO"].unique().tolist()
+                    dt_recebimento_select = st.multiselect("Data Recebimento", datas_unicas)
+                if dt_recebimento_select:
+                        df_filtrado_pendentes = df_filtrado_pendentes[df_filtrado_pendentes["DT_RECEBIMENTO"].isin(dt_recebimento_select)]
+                    
+                with col2:
+                    fornecedor_unicos = ["-"] + df_filtrado_pendentes["FORNECEDOR"].unique().tolist()
+                    fornecedor_select = st.selectbox("Fornecedor:", fornecedor_unicos)
+                if fornecedor_select:
+                    if "-" in fornecedor_select:
+                        pass
+                    else:
+                        df_filtrado_pendentes = df_filtrado_pendentes[df_filtrado_pendentes["FORNECEDOR"] == fornecedor_select]
+                with col3:
+                    nf_unicas = ["-"] + df_filtrado_pendentes["N_NF"].unique().tolist()
+                    nf_select = st.selectbox("NF'S:", nf_unicas)
+                if nf_select:
+                    if "-" in nf_select:
+                        pass
+                    else:
+                      df_filtrado_pendentes = df_filtrado_pendentes[df_filtrado_pendentes["N_NF"] == nf_select]  
+                      
+                st.dataframe(df_filtrado_pendentes[["DT_RECEBIMENTO", "N_NF", "PESO", "FORNECEDOR", "CHAVE_NF", "STATUS"]], use_container_width=True)
+
                 if not df_cliente_pendentes.empty:
                     # Cria um buffer em memória para o ZIP
                     zip_buffer = io.BytesIO()
