@@ -104,6 +104,15 @@ def to_excel(df_pendentes , df_entregues):
             # verifique se o dataframe não é vazio
             if not df.empty:
                 df = df.drop(columns=["id", "CAMINHO_DO_PDF"], errors='ignore')
+                df = df.rename(
+                    columns={
+                            "DT_RECEBIMENTO" : "DATA RECEBIMENTO",
+                            "N_NF" : "NOTA FISCAL",
+                            "CHAVE_NF" : "CHAVE DA NOTA FISCAL",
+                            "STATUS" : "STATUS DE ENVIO",
+                            "DATA_ENVIO" : "DATA DE ENVIO"
+                    }
+                )
                 # se não for transforme em excel utilizando o escritor de arquivos, considere o index falso e o nome da aba será a sheet_name
                 df.to_excel(writer, sheet_name=sheet_name,index=False)
                 #acessamos a aba recem criada e armazenaos em worksheet permitindo formatação
@@ -556,9 +565,19 @@ elif role == "rip_servicos":
                         pass
                     else:
                       df_filtrado_pendentes = df_filtrado_pendentes[df_filtrado_pendentes["N_NF"] == nf_select]  
+                
+                df_filtrado_pendentes_exibicao = df_filtrado_pendentes.copy()
+                df_filtrado_pendentes_exibicao = df_filtrado_pendentes_exibicao.rename(
+                    columns={
+                            "DT_RECEBIMENTO" : "DATA RECEBIMENTO",
+                            "N_NF" : "NOTA FISCAL",
+                            "CHAVE_NF" : "CHAVE DA NOTA FISCAL",
+                            "STATUS" : "STATUS DE ENVIO"
+                    }
+                )
                  
-                df_filtrado_pendentes = df_filtrado_pendentes.set_index("DT_RECEBIMENTO")      
-                st.dataframe(df_filtrado_pendentes[[ "N_NF", "FORNECEDOR", "PESO", "CHAVE_NF", "STATUS"]], use_container_width=True)
+                df_filtrado_pendentes_exibicao = df_filtrado_pendentes_exibicao.set_index("DATA RECEBIMENTO")      
+                st.dataframe(df_filtrado_pendentes_exibicao[[ "NOTA FISCAL", "FORNECEDOR", "PESO", "CHAVE DA NOTA FISCAL", "STATUS DE ENVIO"]], use_container_width=True)
 
                 if not df_cliente_pendentes.empty:
                     # Cria um buffer em memória para o ZIP
@@ -579,7 +598,7 @@ elif role == "rip_servicos":
                     with col1:
                         # Exibe o botão para download do ZIP
                         st.download_button(
-                            label="📥 Baixar todas as NF disponiveis no Galpão",
+                            label="📥 Download das NF’s selecionadas",
                             data=zip_buffer,
                             file_name="notas_fiscais_pendentes.zip",
                             mime="application/zip"
@@ -628,10 +647,21 @@ elif role == "rip_servicos":
                     else:
                       df_filtrado_entregues = df_filtrado_entregues[df_filtrado_entregues["N_NF"] == nf_select]  
                  
-                df_filtrado_entregues = df_filtrado_entregues.set_index("DT_RECEBIMENTO")      
+                # df_filtrado_entregues = df_filtrado_entregues.set_index("DT_RECEBIMENTO")      
 
                 if df_filtrado_entregues is not None and not df_filtrado_entregues.empty:
                     # df_clientes_entregues = df_clientes_entregues.set_index("DT_RECEBIMENTO")
-                    st.dataframe(df_filtrado_entregues, use_container_width=True)
+                    df_filtrado_entregues_exibicao = df_filtrado_entregues.copy()
+                    df_filtrado_entregues_exibicao = df_filtrado_entregues_exibicao.rename(
+                        columns={
+                            "DT_RECEBIMENTO" : "DATA RECEBIMENTO",
+                            "N_NF" : "NOTA FISCAL",
+                            "CHAVE_NF" : "CHAVE DA NOTA FISCAL",
+                            "STATUS" : "STATUS DE ENVIO",
+                            "DATA_ENVIO" : "DATA DE ENTREGA"
+                         }
+                    )
+                    df_filtrado_entregues_exibicao = df_filtrado_entregues_exibicao.set_index("DATA RECEBIMENTO") 
+                    st.dataframe(df_filtrado_entregues_exibicao[[ "NOTA FISCAL", "FORNECEDOR", "PESO", "CHAVE DA NOTA FISCAL", "STATUS DE ENVIO", "DATA DE ENTREGA"]], use_container_width=True)
                 else:
                     st.info("📢 Nenhuma carga entregue registrada até o momento.")  
