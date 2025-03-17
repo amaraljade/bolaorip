@@ -103,6 +103,7 @@ def to_excel(df_pendentes , df_entregues):
         for df, sheet_name in df_list:
             # verifique se o dataframe não é vazio
             if not df.empty:
+                df = df.drop(columns=["id", "CAMINHO_DO_PDF"], errors='ignore')
                 # se não for transforme em excel utilizando o escritor de arquivos, considere o index falso e o nome da aba será a sheet_name
                 df.to_excel(writer, sheet_name=sheet_name,index=False)
                 #acessamos a aba recem criada e armazenaos em worksheet permitindo formatação
@@ -565,7 +566,7 @@ elif role == "rip_servicos":
                     
                     # Cria o arquivo ZIP e adiciona os PDFs pendentes
                     with zipfile.ZipFile(zip_buffer, "w") as zip_file:
-                        for index, row in df_cliente_pendentes.iterrows():
+                        for index, row in df_filtrado_pendentes.iterrows():
                             caminho_pdf = row["CAMINHO_DO_PDF"]
                             if caminho_pdf and os.path.exists(caminho_pdf):
                                 # Usa o nome base do arquivo para evitar incluir caminhos completos dentro do ZIP
