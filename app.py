@@ -1,81 +1,89 @@
-import streamlit as st 
-import sqlite3
-import os
-import pandas as pd
-import datetime
-import io
-import zipfile
-import time
-import uuid
-from io import BytesIO
-from googleapiclient.discovery import build
-from google.oauth2 import service_account
-from googleapiclient.http import MediaIoBaseDownload
-from googleapiclient.http import MediaFileUpload
+import streamlit as st # Biblioteca Streamlit
+import sqlite3 # Biblioteca Sqlite
+import os # Biblioteca do sistema
+import pandas as pd # Biblioteca Pandas <3
+import datetime # Biblioteca manupulação datas
+import io # Biblioteca para manupular memória (Buffer zip)
+import zipfile # Biblioteca para gerar o arquivo zip
+import time # Biblioteca para usarmos o sleep
+import uuid #Biblioteca usada para gerar a chave aleatórea para limpar o session_state quando pdf cadastrado
+from io import BytesIO #Módulo para criar Buffer binario
+from googleapiclient.discovery import build #Biblioteca para criar api (drive_service)
+from google.oauth2 import service_account #Biblioteca para autenticar a conta do google
+from googleapiclient.http import MediaIoBaseDownload,MediaFileUpload #Módulo para fazer upload/download de arquivos com a api da google
 
 
-# Caminho para o arquivo JSON da conta de serviço
-SERVICE_ACCOUNT_FILE = "drive_credentials.json"  # Confirme se o arquivo JSON está no mesmo diretório do script
 
-# Escopo da API do Google Drive
+#---------------------------------------------------------------------#
+#--- Configurando crendenciais, API, drive e caminho pasta------------#
+# Caminho para o arquivo JSON da conta de serviço 
+SERVICE_ACCOUNT_FILE = "drive_credentials.json"  
+# Escopo da API Google Drive - (API que usaremos para manipular os pfds)
 SCOPES = ["https://www.googleapis.com/auth/drive"]
-
-
-# Autenticação com as credenciais
+# Autenticação com as credenciais - (Carrega o arquivo JSON com as credenciais da conta de serviço)
 credentials = service_account.Credentials.from_service_account_file(
-    SERVICE_ACCOUNT_FILE, scopes=SCOPES
-)
-
+    SERVICE_ACCOUNT_FILE, scopes=SCOPES)
 # Criar o serviço do Google Drive
 drive_service = build("drive", "v3", credentials=credentials)
-
-# ID da pasta no Google Drive onde os PDFs serão armazenados
-FOLDER_ID = "1sb5KW9rj5yRwwIyljw-WqO3Yx6ffzWvq"  # Substitua pelo ID correto da pasta no Google Drive
-
-
-def listar_arquivos_drive(folder_id):
-    """Retorna uma lista de arquivos dentro da pasta do Google Drive."""
-    query = f"'{folder_id}' in parents"
-    results = drive_service.files().list(q=query, fields="files(id, name)").execute()
-    return results.get("files", [])
+# ID da pasta no Google Drive onde os PDFs serão armazenados e baixados
+FOLDER_ID = "1sb5KW9rj5yRwwIyljw-WqO3Yx6ffzWvq" 
+#---------------------------------------------------------------------#
+#---------------------------------------------------------------------#
 
 
 
-def baixar_zip_filtrado(df_filtrado_pendentes):
-    """Cria um ZIP contendo apenas os PDFs do DataFrame filtrado no Google Drive."""
-    if df_filtrado_pendentes.empty:
+#---------------------------------------------------------------------#
+#--- Função para listar os arquivos disponiveis no drive--------------#
+def listar_arquivos_drive(folder_id): # Passamos o id como parametro da função
+    query = f"'{folder_id}' in parents" # Armazenamos na variavel query que ele procure todos os arquivos cujo campo ‘parents’ contenha esse ID de pasta.
+    #utilizamos o metodo list do objeto files para passar a query(forma de pesquisa que queremos), quais informaçoes queremos (id e nome) e executamos armazendo a lista em results
+    results = drive_service.files().list(q=query, fields="files(id, name)").execute() 
+    return results.get("files", []) #pegamos o dicionario retornado da pesquisa e tentamos acessar a chave files, caso não exista retornamos uma lista vazia []
+#---------------------------------------------------------------------#
+#---------------------------------------------------------------------#
+
+
+
+#---------------------------------------------------------------------#
+#--- Função para baixar o zip dos pfd---------------------------------# ------------------------------------------ TROQUEI O NOME DO DATAFRAME CASO DE MERDA ANTES TA df_filtrado_pendentes
+def baixar_zip_filtrado(df_filtrado):
+    # Se o dataframe passado for vazio
+    if df_filtrado.empty:
+        # exiba um alerta avisando que não tem nota fiscal para os filtros selecionados
         st.warning("Nenhuma nota fiscal encontrada para os filtros selecionados.")
+        # não retorna nada
         return None
+    # caso exista informações no dataframe...
+    # chamamos a função que lista os arquivos presentes na pasta e passamos o id da pasta, armazenamos a lista na variavel arquivos_drive
     arquivos_drive = listar_arquivos_drive(FOLDER_ID)
-    # Criar dicionário para correspondência exata de nomes
+    # Criamos um dicionario para garantirmos a correnpondecia exata do nome - para cada arquivo da lista , crie um dicionario com o seu nome e id 
     arquivos_dict = {arquivo["name"].strip(): arquivo["id"] for arquivo in arquivos_drive}
+    zip_buffer = io.BytesIO() #Criamos um buffer na memoria para armazenar os dados do zip
+    with zipfile.ZipFile(zip_buffer, "w") as zip_file: #utilizamos o with para criar um bloco de execução onde usaremos o zipfile para criar um novo zip (w) e armazenaremos em zip_buffer
+        for _, row in df_filtrado.iterrows(): #utilizamos o _ para ignorar o indice e acessar apenas o conteudo de cada linha do dataframe passado a função
+            nome_pdf = os.path.basename(row["CAMINHO_DO_PDF"]).strip() # extraimos apenas o nome do dataframe removendo o diretorio e aproveitamos para remover possiveis espaços em branco
 
-    zip_buffer = io.BytesIO()
-    with zipfile.ZipFile(zip_buffer, "w") as zip_file:
-        for _, row in df_filtrado_pendentes.iterrows():
-            nome_pdf = os.path.basename(row["CAMINHO_DO_PDF"]).strip()
-
-            if nome_pdf in arquivos_dict:
-                file_id = arquivos_dict[nome_pdf]
-
-                # Baixar o arquivo do Google Drive
-                request = drive_service.files().get_media(fileId=file_id)
-                file_data = io.BytesIO()
-                downloader = MediaIoBaseDownload(file_data, request)
-                done = False
-                while not done:
-                    _, done = downloader.next_chunk()
-
-                # Adicionar ao ZIP
-                zip_file.writestr(nome_pdf, file_data.getvalue())
-
+            if nome_pdf in arquivos_dict: # verificamos se o nome encontrado na linha do dataframe está presente na lista de arquivos presentes no google drive
+                file_id = arquivos_dict[nome_pdf] # armazenamos em file_id o nome do pdf encontrado no google drive
+                request = drive_service.files().get_media(fileId=file_id) # fazemos uma requisição, utilizamos o objeto file e o modulo get media para pegar o pfd e passamos o file_id(nome do pdf) como argumento
+                file_data = io.BytesIO() # criamos outro buffer na memória onde armazenaremos o pdf
+                downloader = MediaIoBaseDownload(file_data, request) #usamos o modulo media para armazenar no file_data a resposta da requisição realizada
+                done = False # criamos a variavel para verificar se o downloado terminou
+                while not done: # o loop continuar até o dowloand terminar
+                    _, done = downloader.next_chunk() #chamamos o metodo next_chunck para que ele baixe mais um pedaço e escreva em file_data
+                zip_file.writestr(nome_pdf, file_data.getvalue()) # usamos o zip_file e o metodo writestr para inserirmos os pdfs no zip
+            # caso não exista o nome do pdf na lista de arquivos presentes ele enviará um aviso ao usuário informando que não encontrou o pdf
             else:
                 st.warning(f"⚠️ Arquivo {nome_pdf} não encontrado no Google Drive.")
-
+    # retornamos o cursor para o inicio da gravação para podermos baixar e escrever outros zips no mesmo bufffer apos utilizar 
     zip_buffer.seek(0)
-    return zip_buffer
+    return zip_buffer # retorna o buffer 
+#---------------------------------------------------------------------#
+#---------------------------------------------------------------------#
 
 
+#---------------------------------------------------------------------#
+#--- Função para subir os pdfs na pasta do google drive---------------#
 def upload_to_drive(file_path, file_name):
     """
     Envia um arquivo PDF para o Google Drive, 
@@ -474,9 +482,7 @@ if role == "admin":
                 
                 
                 
-        with tab2:
-            st.write("Aqui você pode atualizar os status das notas e incluir as datas de envio")
-            
+        with tab2:            
             # Conectando ao banco de dados 
             conn = get_db_connection()
             # Selecionando todas as informações da tabela e convertendo em dataframe
@@ -488,18 +494,17 @@ if role == "admin":
             if df.empty:
                 st.info("Não há notas cadastradas para atualizar.")
             else:
-                status_filtro = st.selectbox("Filtrar notas por Status", ["Todas", "Pendente", "Processada", "Cancelada", "Enviado"])
-                if status_filtro != "Todas":
-                    df = df[df["STATUS"] == status_filtro]
-            
-            st.dataframe(df)
-            
-            st.write("Atualizar envios:")
-            df_pendentes = df[df["STATUS"] == "Pendente"]
-            
-            if not df_pendentes.empty:
+                df_pendentes_atualizar = df[df["STATUS"] == "Pendente"].copy()
                 st.write("Notas Fiscais pendentes de envio:")
-                st.dataframe(df_pendentes)
+                df_pendentes_atualizar = df_pendentes_atualizar.rename(
+                    columns={
+                        "DT_RECEBIMENTO" : "DATA RECEBIMENTO",
+                        "N_NF" : "NOTA FISCAL",
+                        "CHAVE_NF": "CHAVE NOTA FISCAL",
+                        "DATA_ENVIO" : "DATA ENVIO"
+                    })
+                df_pendentes_atualizar = df_pendentes_atualizar.set_index("DATA RECEBIMENTO")
+                st.dataframe(df_pendentes_atualizar[["NOTA FISCAL", "PESO", "FORNECEDOR", "CHAVE NOTA FISCAL", "STATUS", "DATA ENVIO"]])
                 
                 with st.form("form_enviar_pendentes"):
                     st.write("Atualização de Envio:")
@@ -518,7 +523,7 @@ if role == "admin":
                         conn.commit()
                         conn.close()
                         # função de apagar pdfs da base de dados ------------------------------------------------------------ ANOTAR DE ARRUMAR VIRAR FUNÇÃO MESMO
-                        for idx, row in df_pendentes.iterrows():
+                        for idx, row in df_pendentes_atualizar.iterrows():
                             nome_pdf = os.path.basename(row["CAMINHO_DO_PDF"]).strip()  # Ex: "20250314_65297_PROTENGE.pdf"
                             arquivos_drive = listar_arquivos_drive(FOLDER_ID)
                             arquivos_dict = {arquivo["name"]: arquivo["id"] for arquivo in arquivos_drive}
@@ -528,24 +533,18 @@ if role == "admin":
                                 st.write(f"PDF {nome_pdf} deletado do Drive.")
                             else:
                                 st.warning(f"PDF {nome_pdf} não encontrado no Drive!")
-                                                
-                        
-                        
-                        
-                        
-                        
+                                                                        
                         st.success("Todas as notas pendentes foram atualizadas")
                         st.rerun()
-            else:
-                    st.info("Não há notas pendentes no momento")
-        with tab3:
-            # st.rerun()
-            tab1,tab2 = st.tabs(["Armazenadas", "Enviadas"])
-            with tab1:
-                st.title("Painel do Cliente")
-                st.write("Bem-vindo! Aqui você pode consultar as notas fiscais armazenadas no Galpão e baixar os PDFs.")
 
-                
+        with tab3:
+            st.logo(logo,size="large") 
+            st.title("Painel do Cliente")
+            tab1,tab2 = st.tabs(["📦  Armazenadas", "✅ Enviadas"])
+            with tab1:
+                st.markdown("📂 Lista de mercadorias armazenadas no galpão e suas respectivas notas fiscais disponíveis para download.")   
+
+                # Conecta ao banco de dados e lê os registros em um DataFrame do pandas
                 conn = get_db_connection()
                 try:
                     df = pd.read_sql_query("SELECT * FROM notas_bolao", conn)
@@ -558,45 +557,121 @@ if role == "admin":
                 # Se existirem dados, exibe-os
                 if df is not None and not df.empty:
                     df_cliente_pendentes = df[df["STATUS"] == "Pendente"]
-                    st.dataframe(df_cliente_pendentes[["DT_RECEBIMENTO", "N_NF", "PESO", "FORNECEDOR", "CHAVE_NF", "STATUS"]])
-                    # st.write("Baixar PDFs das Mercadorias em Galpão:")
-                    if not df_cliente_pendentes.empty:
-                        # Cria um buffer em memória para o ZIP
-                        zip_buffer = io.BytesIO()
+                    df_clientes_entregues = df[(df["STATUS"] == "Entregue") | (df["STATUS"] == "Mantovani")]
+                    
+                    df_filtrado_pendentes = df_cliente_pendentes.copy()
+
+                    
+                    st.header("Filtros:")
+                    col1,col2,col3 = st.columns(3)
+                    with col1:
+                        datas_unicas = df_filtrado_pendentes["DT_RECEBIMENTO"].unique().tolist()
+                        dt_recebimento_select = st.multiselect("Data Recebimento", datas_unicas)
+                    if dt_recebimento_select:
+                            df_filtrado_pendentes = df_filtrado_pendentes[df_filtrado_pendentes["DT_RECEBIMENTO"].isin(dt_recebimento_select)]
                         
-                        # Cria o arquivo ZIP e adiciona os PDFs pendentes
-                        with zipfile.ZipFile(zip_buffer, "w") as zip_file:
-                            for index, row in df_cliente_pendentes.iterrows():
-                                caminho_pdf = row["CAMINHO_DO_PDF"]
-                                if caminho_pdf and os.path.exists(caminho_pdf):
-                                    # Usa o nome base do arquivo para evitar incluir caminhos completos dentro do ZIP
-                                    zip_file.write(caminho_pdf, arcname=os.path.basename(caminho_pdf))
-                        
-                        # Posiciona o ponteiro do buffer no início
-                        zip_buffer.seek(0)
-                        
-                        # Exibe o botão para download do ZIP
-                        st.download_button(
-                            label="Baixar Todas as NF disponiveis no Galpão",
-                            data=zip_buffer,
-                            file_name="notas_fiscais_pendentes.zip",
-                            mime="application/zip"
-                        )
+                    with col2:
+                        fornecedor_unicos = ["-"] + df_filtrado_pendentes["FORNECEDOR"].unique().tolist()
+                        fornecedor_select = st.selectbox("Fornecedor:", fornecedor_unicos)
+                    if fornecedor_select:
+                        if "-" in fornecedor_select:
+                            pass
+                        else:
+                            df_filtrado_pendentes = df_filtrado_pendentes[df_filtrado_pendentes["FORNECEDOR"] == fornecedor_select]
+                    with col3:
+                        nf_unicas = ["-"] + df_filtrado_pendentes["N_NF"].unique().tolist()
+                        nf_select = st.selectbox("NF'S:", nf_unicas)
+                    if nf_select:
+                        if "-" in nf_select:
+                            pass
                     else:
-                        st.info("Não há notas fiscais pendentes para baixar.")
+                        df_filtrado_pendentes = df_filtrado_pendentes[df_filtrado_pendentes["N_NF"] == nf_select]  
                     
                     
+                    df_filtrado_pendentes_exibicao = df_filtrado_pendentes.copy()
+                    df_filtrado_pendentes_exibicao = df_filtrado_pendentes_exibicao.rename(
+                        columns={
+                                "DT_RECEBIMENTO" : "DATA RECEBIMENTO",
+                                "N_NF" : "NOTA FISCAL",
+                                "CHAVE_NF" : "CHAVE DA NOTA FISCAL",
+                                "STATUS" : "STATUS DE ENVIO"
+                        }
+                    )
                     
+                    df_filtrado_pendentes_exibicao = df_filtrado_pendentes_exibicao.set_index("DATA RECEBIMENTO")      
+                    st.dataframe(df_filtrado_pendentes_exibicao[[ "NOTA FISCAL", "FORNECEDOR", "PESO", "CHAVE DA NOTA FISCAL", "STATUS DE ENVIO"]], use_container_width=True)
+
+                        
+                    col1,col2 = st.columns(2)
+                    with col1:
+                        if st.button("📂 Gerar ZIP das Notas Fiscais selecionadas"):
+                            with st.spinner("Gerando ZIP, aguarde..."):
+                                # 🔽 Criar o ZIP apenas com os arquivos filtrados
+                                zip_buffer = baixar_zip_filtrado(df_filtrado_pendentes)
+
+                                if zip_buffer:
+                                    st.download_button(
+                                        label="📥 Baixar ZIP com notas fiscais filtradas",
+                                        data=zip_buffer,
+                                        file_name="notas_fiscais_filtradas.zip",
+                                        mime="application/zip"
+                                    )
+                                else:
+                                    st.info("Nenhum arquivo foi encontrado para gerar o ZIP.")
+                            
+                        with col2:
+                            st.download_button(
+                                label="📥 Baixar Relatório Excel das NF disponiveis no Galpão",
+                                data=to_excel(df_cliente_pendentes,df_clientes_entregues),
+                                file_name="relatorio_notas_bolao.xlsx",
+                                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                            )
+                        
+                with tab2:
+                    st.write("Acesse as notas fiscais das cargas já entregues e baixe os PDFs quando necessário.")           
+                    st.header("Filtros:")
+                    col1,col2,col3 = st.columns(3)
+                    with col1:
+                        df_filtrado_entregues = df_clientes_entregues.copy()
+                        
+                        datas_unicas = df_filtrado_entregues["DT_RECEBIMENTO"].unique().tolist()
+                        dt_recebimento_select = st.multiselect("Data Recebimento", datas_unicas, key="filtro_data")
+                    if dt_recebimento_select:
+                            df_filtrado_entregues = df_filtrado_entregues[df_filtrado_entregues["DT_RECEBIMENTO"].isin(dt_recebimento_select)]
+                    with col2:
+                        fornecedor_unicos = ["-"] + df_filtrado_entregues["FORNECEDOR"].unique().tolist()
+                        fornecedor_select = st.selectbox("Fornecedor:", fornecedor_unicos)
+                    if fornecedor_select:
+                        if "-" in fornecedor_select:
+                            pass
+                        else:
+                            df_filtrado_entregues = df_filtrado_entregues[df_filtrado_entregues["FORNECEDOR"] == fornecedor_select]
+                    with col3:
+                        nf_unicas = ["-"] + df_filtrado_entregues["N_NF"].unique().tolist()
+                        nf_select = st.selectbox("NF'S:", nf_unicas)
+                    if nf_select:
+                        if "-" in nf_select:
+                            pass
+                        else:
+                            df_filtrado_entregues = df_filtrado_entregues[df_filtrado_entregues["N_NF"] == nf_select]  
+                        
+                    if df_filtrado_entregues is not None and not df_filtrado_entregues.empty:
+                        df_filtrado_entregues_exibicao = df_filtrado_entregues.copy()
+                        df_filtrado_entregues_exibicao = df_filtrado_entregues_exibicao.rename(
+                            columns={
+                                "DT_RECEBIMENTO" : "DATA RECEBIMENTO",
+                                "N_NF" : "NOTA FISCAL",
+                                "CHAVE_NF" : "CHAVE DA NOTA FISCAL",
+                                "STATUS" : "STATUS DE ENVIO",
+                                "DATA_ENVIO" : "DATA DE ENTREGA"
+                            }
+                        )
+                        df_filtrado_entregues_exibicao = df_filtrado_entregues_exibicao.set_index("DATA RECEBIMENTO") 
+                        st.dataframe(df_filtrado_entregues_exibicao[[ "NOTA FISCAL", "FORNECEDOR", "PESO", "CHAVE DA NOTA FISCAL", "STATUS DE ENVIO", "DATA DE ENTREGA"]], use_container_width=True)
+                    else:
+                        st.info("📢 Nenhuma carga entregue registrada até o momento.")  
             
-                else:
-                    st.info("Nenhuma nota fiscal encontrada no sistema.")   
-            with tab2:
-                st.write("Aqui você pode consultar as notas fiscais entregues e baixar os PDFs.")           
-                df_clientes_entregues = df[(df["STATUS"] == "Entregue") | (df["STATUS"] == "Mantovani")]
-                if df_clientes_entregues is not None and not df_clientes_entregues.empty:
-                    st.dataframe(df_clientes_entregues)
-                else:
-                    st.info("Cargas não entregues ainda")           
+          
                             
                         
 
