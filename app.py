@@ -59,6 +59,7 @@ def baixar_zip_filtrado(df_filtrado):
     # Criamos um dicionario para garantirmos a correnpondecia exata do nome - para cada arquivo da lista , crie um dicionario com o seu nome e id 
     arquivos_dict = {arquivo["name"].strip(): arquivo["id"] for arquivo in arquivos_drive}
     zip_buffer = io.BytesIO() #Criamos um buffer na memoria para armazenar os dados do zip
+    
     with zipfile.ZipFile(zip_buffer, "w") as zip_file: #utilizamos o with para criar um bloco de execução onde usaremos o zipfile para criar um novo zip (w) e armazenaremos em zip_buffer
         for _, row in df_filtrado.iterrows(): #utilizamos o _ para ignorar o indice e acessar apenas o conteudo de cada linha do dataframe passado a função
             nome_pdf = os.path.basename(row["CAMINHO_DO_PDF"]).strip() # extraimos apenas o nome do dataframe removendo o diretorio e aproveitamos para remover possiveis espaços em branco
@@ -69,9 +70,11 @@ def baixar_zip_filtrado(df_filtrado):
                 file_data = io.BytesIO() # criamos outro buffer na memória onde armazenaremos o pdf
                 downloader = MediaIoBaseDownload(file_data, request) #usamos o modulo media para armazenar no file_data a resposta da requisição realizada
                 done = False # criamos a variavel para verificar se o downloado terminou
+                
                 while not done: # o loop continuar até o dowloand terminar
                     _, done = downloader.next_chunk() #chamamos o metodo next_chunck para que ele baixe mais um pedaço e escreva em file_data
                 zip_file.writestr(nome_pdf, file_data.getvalue()) # usamos o zip_file e o metodo writestr para inserirmos os pdfs no zip
+                
             # caso não exista o nome do pdf na lista de arquivos presentes ele enviará um aviso ao usuário informando que não encontrou o pdf
             else:
                 st.warning(f"⚠️ Arquivo {nome_pdf} não encontrado no Google Drive.")
@@ -82,35 +85,63 @@ def baixar_zip_filtrado(df_filtrado):
 #---------------------------------------------------------------------#
 
 
+
 #---------------------------------------------------------------------#
-#--- Função para subir os pdfs na pasta do google drive---------------#
-def upload_to_drive(file_path, file_name):
-    """
-    Envia um arquivo PDF para o Google Drive, 
-    mantendo o mesmo nome do PDF local.
-    """
+#Função para subir os pdfs na pasta do google drive-------------------#
+def upload_to_drive(file_path, file_name): # Função criada para envio do pdf para o google drive mantendo o mesmo nome do pdf local
     file_metadata = {
-        "name": file_name,          # Usa exatamente o mesmo nome local
-        "parents": ["1sb5KW9rj5yRwwIyljw-WqO3Yx6ffzWvq"]      # Substitua FOLDER_ID pelo ID da pasta no Drive
+        "name": file_name,# Nome do arquivo
+        "parents": ["1sb5KW9rj5yRwwIyljw-WqO3Yx6ffzWvq"]# ID da pasta onde será salvo o pdf
     }
     
-    media = MediaFileUpload(file_path, mimetype="application/pdf")
-    
-    file = drive_service.files().create(
-        body=file_metadata,
-        media_body=media,
-        fields="id"
-    ).execute()
+    media = MediaFileUpload(file_path, mimetype="application/pdf") # usamos o metodo media fileupload para pegar o caminho do pdf e enviamos para requisição
+    file = drive_service.files().create( #usamos o drive_service, acessamos o objeto files e com o metodo create 
+        body=file_metadata, # Passamos o nome do arquivo e o id da pasta
+        media_body=media, # passamos o metodo que será usado
+        fields="id" #informamos que queremos apenas o retorno do id
+    ).execute() # executamos a ação
 
     # Torna o arquivo público (opcional, mas comum para permitir download)
-    drive_service.permissions().create(
-        fileId=file["id"],
-        body={"role": "reader", "type": "anyone"},
-    ).execute()
+    drive_service.permissions().create( #tornamos o arquivo publico para permitiro o download
+        fileId=file["id"], # pegamos o  id 
+        body={"role": "reader", "type": "anyone"}, #alteramos atraves do id para leitura qualquer um
+    ).execute() # exeuctamos a ação
 
-    st.success("Nota salva no drive com sucesso!!")
-    time.sleep(2)
-    return file["id"]  # Você pode retornar só o ID ou montar um link
+    st.success("Nota salva no drive com sucesso!!") # Emitimos a  mensagem de sucesso 
+    time.sleep(0.8) # damos um tempo para a mensagem ser exibida
+    return file["id"]  # retornamos o id caso seja preciso um dia deletar ou ajustar esse arquivo sem precisar de match por nome
+#---------------------------------------------------------------------#
+#---------------------------------------------------------------------#
+
+
+
+#---------------------------------------------------------------------#
+#Função para deleção dos pdfs na pasta do google drive----------------#
+def deletar_drive(df): #passamos o dataframe para função
+    for idx, row in df.iterrows(): # interamos sobre o dataframe, e pegamos o index de cada linha
+        nome_pdf = os.path.basename(row["CAMINHO_DO_PDF"]).strip()  #armazenamos na variavel nome pdf, o nome do pdf na coluna caminho, removemos vazio e retiramos o caminho do nome da base
+        arquivos_drive = listar_arquivos_drive(FOLDER_ID) # chamamos a função para listar os arquivos do drive
+        arquivos_dict = {arquivo["name"]: arquivo["id"] for arquivo in arquivos_drive} # criamos um dicionario pegando o nome do arquivo e o ida para cada arquivo presente no dicionario
+        if nome_pdf in arquivos_dict: # se o nome do pdf estiver presente no dicionario 
+            file_id = arquivos_dict[nome_pdf] # armazenamos na variavel a busca do nome do pdf no dicionario
+            drive_service.files().delete(fileId=file_id).execute()   # usamos o objeto file e o metodo delete para deletar o arquivo pelo nome e executamos o processo
+            st.write(f"PDF {nome_pdf} deletado do Drive.") # exibimos ao usuario a mensagem de que o pdf foi deletado no drive
+        else: # caso o nome do pdf não esteja presente no dicionario
+            st.warning(f"PDF {nome_pdf} não encontrado no Drive!") # exibimos ao usuario a mensagem de erro
+#---------------------------------------------------------------------#
+#---------------------------------------------------------------------#
+
+
+
+#---------------------------------------------------------------------#
+# Função para conectar ao banco---------------------------------------#
+def get_db_connection():
+    # Conecta ao banco de dados SQLite criado anteriormente
+    conn = sqlite3.connect('notas_bolao_teste.db')
+    return conn
+#---------------------------------------------------------------------#
+#---------------------------------------------------------------------#
+
 
 
 #---------------------------------------------------------------------#
@@ -144,13 +175,6 @@ user_credentials = st.secrets["users"]
 
 
 
-#---------------------------------------------------------------------#
-# Função para conectar ao banco---------------------------------------#
-def get_db_connection():
-    # Conecta ao banco de dados SQLite criado anteriormente
-    conn = sqlite3.connect('notas_bolao.db')
-    return conn
-#---------------------------------------------------------------------#
 #---------------------------------------------------------------------#
 
 
@@ -354,7 +378,7 @@ if role == "admin":
 #---------------------------------------------------------------------#
 # ABAS - MODO ADMINISTRADOR-------------------------------------------#  
     # Crio 3 abas
-    tab1, tab2, tab3 = st.tabs(["Cadastro", "Atualização", "Visão Cliente"])
+    cadastro, atualizaçao, visao_cliente = st.tabs(["Cadastro", "Atualização", "Visão Cliente"])
 #---------------------------------------------------------------------#
 #---------------------------------------------------------------------#
 
@@ -392,13 +416,33 @@ if role == "admin":
     if "pdf_file" not in st.session_state:
         # se não foi estancio com uma chave aleatoria para poder limpar o campo depois
         st.session_state["pdf_file"] = str(uuid.uuid4())
+        
+        
+        
+        
+        
+        
+        
+    if "zip_ready" not in st.session_state:
+        st.session_state["zip_ready"] = False
+
+    if "zip_buffer" not in st.session_state:
+        st.session_state["zip_buffer"] = None    
+        
+        
+        
+        
+        
+        
+        
+        
 #---------------------------------------------------------------------#
 #---------------------------------------------------------------------#        
     
 #---------------------------------------------------------------------#
 # TELA CADASTRO - MODO ADMINISTRADOR----------------------------------# 
     # Na primeira aba    
-    with tab1:
+    with cadastro:
         #---------------------------------------------------------------------#
         # crio um formulario chamado form_inserir
         with st.form("form_inserir"):
@@ -428,7 +472,7 @@ if role == "admin":
                 # se um pdf foi inserido no formulario
                 if pdf_file is not None:
                     # definimos o nome da pasta
-                    pdf_dir = "pdfs"
+                    pdf_dir = "pdfs_teste"
                     # caso ela não exista criamos ela utilizando o nome definido
                     if not os.path.exists(pdf_dir):
                         # criando a pasta
@@ -461,7 +505,7 @@ if role == "admin":
                 conn = get_db_connection()
                 cursor = conn.cursor()
                 cursor.execute("""
-                    INSERT INTO notas_bolao (DT_RECEBIMENTO, N_NF, PESO ,FORNECEDOR, CHAVE_NF , STATUS, CAMINHO_DO_PDF)
+                    INSERT INTO notas_bolao_teste (DT_RECEBIMENTO, N_NF, PESO ,FORNECEDOR, CHAVE_NF , STATUS, CAMINHO_DO_PDF)
                     VALUES (?, ?, ?, ?,?, ?, ?)
                 """, (dt_recebimento.strftime("%Y-%m-%d"), n_nf, peso ,fornecedor, chave_nf, status, pdf_path))
                 conn.commit()
@@ -481,73 +525,73 @@ if role == "admin":
                 
                 
                 
-                
-        with tab2:            
-            # Conectando ao banco de dados 
-            conn = get_db_connection()
-            # Selecionando todas as informações da tabela e convertendo em dataframe
-            df = pd.read_sql_query("SELECT * FROM notas_bolao", conn)
+       #-----------------------------------------------------------------#
+       #ABA ATUALIZAÇÃO--------------------------------------------------#         
+        with atualizaçao: # na aba atualização      
+            #CONEXÃO COM O BANCO DE DADOS--------------------------------# 
+            conn = get_db_connection() # Conectamos no banco de dados
+            df = pd.read_sql_query("SELECT * FROM notas_bolao_teste", conn) #selecionamos todos os dados da tabela e transformamos em um dataframe
+            conn.close() # fechamos a conexão com o banco de dados
+            #------------------------------------------------------------#
             
-            conn.close()
-            
-            
-            if df.empty:
-                st.info("Não há notas cadastradas para atualizar.")
-            else:
-                df_pendentes_atualizar = df[df["STATUS"] == "Pendente"].copy()
-                st.write("Notas Fiscais pendentes de envio:")
-                df_pendentes_atualizar = df_pendentes_atualizar.rename(
+            #VERIFICAÇÃO DO DATAFRAME------------------------------------#
+            if df.empty: # se o dataframe estiver vazio
+                st.info("Não há notas cadastradas para atualizar.") #exibimos a mensagem de que não tem notas a serem cadastradas
+            else: # caso exista informações no dataframe
+                #ALTERAÇÃO DO DATAFRAME----------------------------------#
+                df_pendentes_atualizar = df[df["STATUS"] == "Pendente"].copy() # geramos uma copia do dataframe original realizando o filtro de status por pendente
+                st.write("Notas Fiscais pendentes de envio:") # exibimos na tela 
+                df_pendentes_atualizar = df_pendentes_atualizar.rename( # renomeamos as colunas do dataframe antes da exibição
                     columns={
                         "DT_RECEBIMENTO" : "DATA RECEBIMENTO",
                         "N_NF" : "NOTA FISCAL",
                         "CHAVE_NF": "CHAVE NOTA FISCAL",
                         "DATA_ENVIO" : "DATA ENVIO"
                     })
-                df_pendentes_atualizar = df_pendentes_atualizar.set_index("DATA RECEBIMENTO")
-                st.dataframe(df_pendentes_atualizar[["NOTA FISCAL", "PESO", "FORNECEDOR", "CHAVE NOTA FISCAL", "STATUS", "DATA ENVIO"]])
-                
-                with st.form("form_enviar_pendentes"):
-                    st.write("Atualização de Envio:")
-                    data_envio = st.date_input("Data Envio", value=datetime.datetime.today())
-                    novo_status = st.selectbox("Novo Status:", ["Entregue", "Mantovani","Cancelado"])
-                    confirmar = st.form_submit_button("Enviar todas pendentes")
-                    
-                    if confirmar:
-                        conn = get_db_connection()
-                        cursor = conn.cursor()
-                        cursor.execute("""
-                                    UPDATE notas_bolao
+                df_pendentes_atualizar = df_pendentes_atualizar.set_index("DATA RECEBIMENTO") # setamos o index para data de recebimento para ficar melhor na vizualização
+                #EXIBIÇÃO DO DATAFRAME-----------------------------------#
+                st.dataframe(df_pendentes_atualizar[["NOTA FISCAL", "PESO", "FORNECEDOR", "CHAVE NOTA FISCAL", "STATUS", "DATA ENVIO"]], use_container_width=True) #exibimos o dataframe com as colunas selecionadas
+
+                #CRIAÇÃO DO FORMULARIO DE ENVIO--------------------------#
+                with st.form("form_enviar_pendentes"): # No formulario 
+                    st.write("Atualização de Envio:") # escrevemos
+                    data_envio = st.date_input("Data Envio", value=datetime.datetime.today()) # inserimos o input de data, definindo a data base como atual
+                    novo_status = st.selectbox("Novo Status:", ["Entregue", "Mantovani"]) # Inserindo as opções de novo status
+                    confirmar = st.form_submit_button("Enviar todas pendentes") #crimos o botão de envio do formulario
+                    if confirmar: # se o botão for clicado (true)
+                        #CONEXÃO COM O BANCO DE DADOS--------------------#
+                        conn = get_db_connection() # realizamos a conexão com o banco de dados
+                        cursor = conn.cursor() # criamos o cursor para poder navegar no banco
+                        cursor.execute(""" 
+                                    UPDATE notas_bolao_teste
                                     SET STATUS = ? , DATA_ENVIO = ?
                                     WHERE STATUS = "Pendente"
-                                    """, (novo_status, data_envio.strftime("%Y-%m-%d")))
-                        conn.commit()
-                        conn.close()
-                        # função de apagar pdfs da base de dados ------------------------------------------------------------ ANOTAR DE ARRUMAR VIRAR FUNÇÃO MESMO
-                        for idx, row in df_pendentes_atualizar.iterrows():
-                            nome_pdf = os.path.basename(row["CAMINHO_DO_PDF"]).strip()  # Ex: "20250314_65297_PROTENGE.pdf"
-                            arquivos_drive = listar_arquivos_drive(FOLDER_ID)
-                            arquivos_dict = {arquivo["name"]: arquivo["id"] for arquivo in arquivos_drive}
-                            if nome_pdf in arquivos_dict:
-                                file_id = arquivos_dict[nome_pdf]
-                                drive_service.files().delete(fileId=file_id).execute()   # <- Deletando no Drive
-                                st.write(f"PDF {nome_pdf} deletado do Drive.")
-                            else:
-                                st.warning(f"PDF {nome_pdf} não encontrado no Drive!")
-                                                                        
-                        st.success("Todas as notas pendentes foram atualizadas")
-                        st.rerun()
-
-        with tab3:
+                                    """, (novo_status, data_envio.strftime("%Y-%m-%d"))) # atraves do cursor executamos a query de atualizar a tabela, passamos os paramos de status e envio
+                                                                                         # para os dados onde o status estão como pendente
+                        conn.commit() # realizamos a alteração
+                        conn.close() # fechamos o banco de dados 
+                        #DELEÇÃO DO DRIVE--------------------------------#
+                        deletar_drive(df_pendentes_atualizar) # chamamos a função para deletar o pdf do drive                                                                                                                     
+                        st.success("Todas as notas pendentes foram atualizadas") # exibimos a mensagem de sucesso
+                        st.rerun() # atualizamos
+       #-----------------------------------------------------------------#
+       #-----------------------------------------------------------------#                 
+                        
+                        
+                    
+       #-----------------------------------------------------------------#
+       #ABA VISAO CLIENTE------------------------------------------------# 
+        with visao_cliente:
             st.logo(logo,size="large") 
             st.title("Painel do Cliente")
-            tab1,tab2 = st.tabs(["📦  Armazenadas", "✅ Enviadas"])
-            with tab1:
+            armazenadas,enviadas = st.tabs(["📦  Armazenadas", "✅ Enviadas"])
+            with armazenadas:
                 st.markdown("📂 Lista de mercadorias armazenadas no galpão e suas respectivas notas fiscais disponíveis para download.")   
 
                 # Conecta ao banco de dados e lê os registros em um DataFrame do pandas
                 conn = get_db_connection()
                 try:
-                    df = pd.read_sql_query("SELECT * FROM notas_bolao", conn)
+                    df = pd.read_sql_query("SELECT * FROM notas_bolao_teste", conn)
                 except Exception as e:
                     st.error("Erro ao carregar os dados: " + str(e))
                     df = None
@@ -566,13 +610,13 @@ if role == "admin":
                     col1,col2,col3 = st.columns(3)
                     with col1:
                         datas_unicas = df_filtrado_pendentes["DT_RECEBIMENTO"].unique().tolist()
-                        dt_recebimento_select = st.multiselect("Data Recebimento", datas_unicas)
+                        dt_recebimento_select = st.multiselect("DATA RECEBIMENTO:", datas_unicas)
                     if dt_recebimento_select:
                             df_filtrado_pendentes = df_filtrado_pendentes[df_filtrado_pendentes["DT_RECEBIMENTO"].isin(dt_recebimento_select)]
                         
                     with col2:
                         fornecedor_unicos = ["-"] + df_filtrado_pendentes["FORNECEDOR"].unique().tolist()
-                        fornecedor_select = st.selectbox("Fornecedor:", fornecedor_unicos)
+                        fornecedor_select = st.selectbox("FORNECEDOR:", fornecedor_unicos)
                     if fornecedor_select:
                         if "-" in fornecedor_select:
                             pass
@@ -599,27 +643,80 @@ if role == "admin":
                     )
                     
                     df_filtrado_pendentes_exibicao = df_filtrado_pendentes_exibicao.set_index("DATA RECEBIMENTO")      
-                    st.dataframe(df_filtrado_pendentes_exibicao[[ "NOTA FISCAL", "FORNECEDOR", "PESO", "CHAVE DA NOTA FISCAL", "STATUS DE ENVIO"]], use_container_width=True)
+                    st.dataframe(df_filtrado_pendentes_exibicao[[ "FORNECEDOR","NOTA FISCAL","PESO", "CHAVE DA NOTA FISCAL", "STATUS DE ENVIO"]], use_container_width=True)
 
                         
-                    col1,col2 = st.columns(2)
-                    with col1:
-                        if st.button("📂 Gerar ZIP das Notas Fiscais selecionadas"):
-                            with st.spinner("Gerando ZIP, aguarde..."):
-                                # 🔽 Criar o ZIP apenas com os arquivos filtrados
-                                zip_buffer = baixar_zip_filtrado(df_filtrado_pendentes)
+                    coluna_zip,coluna_excel = st.columns(2)
+                    with coluna_zip:                   
+                        if not st.session_state["zip_ready"]:
+                            # Só mostra o botão "Gerar ZIP" se ainda não geramos
+                            if coluna_zip.button("📂 Gerar ZIP das Notas Fiscais selecionadas"):
+                                with st.spinner("⏳ Gerando ZIP, aguarde..."):
+                                    # Aqui chamamos a função que gera o ZIP
+                                    zip_buffer = baixar_zip_filtrado(df_filtrado_pendentes)
+                                    
+                                    if zip_buffer:
+                                        # Armazena o buffer no session_state
+                                        st.session_state["zip_buffer"] = zip_buffer
+                                        # Marca que o ZIP está pronto
+                                        st.session_state["zip_ready"] = True
+                                        st.success("✅ ZIP gerado com sucesso!")
+                                        time.sleep(0.5)
+                                        st.rerun()
+                                    else:
+                                        st.info("Nenhum arquivo foi encontrado para gerar o ZIP.")
+                        else:
+                            # Se zip_ready = True, exibimos o botão de download
+                            if st.session_state["zip_buffer"]:
+                                if coluna_zip.download_button(
+                                    label="📥 Baixar ZIP com notas fiscais filtradas",
+                                    data=st.session_state["zip_buffer"],
+                                    file_name="notas_fiscais_filtradas.zip",
+                                    mime="application/zip"
+                                ):
+                                    time.sleep(0.5)
+                                    st.session_state["zip_ready"] = False
+                                    st.session_state["zip_buffer"] = None
+                                    st.rerun()
+                            else:
+                                st.info("Nenhum ZIP disponível para download.")    
+                        
+                        
+                        
+                        
+                        
+                        
+                        
+                        
+                        
+                        
+                        
+                        
+                        
+                        
+                        
+                        
+                        
+                        
+                        
+                        
+                        
+                        # if st.button("📂 Gerar ZIP das Notas Fiscais selecionadas"):
+                        #     with st.spinner("Gerando ZIP, aguarde..."):
+                        #         # 🔽 Criar o ZIP apenas com os arquivos filtrados
+                        #         zip_buffer = baixar_zip_filtrado(df_filtrado_pendentes)
 
-                                if zip_buffer:
-                                    st.download_button(
-                                        label="📥 Baixar ZIP com notas fiscais filtradas",
-                                        data=zip_buffer,
-                                        file_name="notas_fiscais_filtradas.zip",
-                                        mime="application/zip"
-                                    )
-                                else:
-                                    st.info("Nenhum arquivo foi encontrado para gerar o ZIP.")
+                        #         if zip_buffer:
+                        #             st.download_button(
+                        #                 label="📥 Baixar ZIP com notas fiscais filtradas",
+                        #                 data=zip_buffer,
+                        #                 file_name="notas_fiscais_filtradas.zip",
+                        #                 mime="application/zip"
+                        #             )
+                        #         else:
+                        #             st.info("Nenhum arquivo foi encontrado para gerar o ZIP.")
                             
-                        with col2:
+                        with coluna_excel:
                             st.download_button(
                                 label="📥 Baixar Relatório Excel das NF disponiveis no Galpão",
                                 data=to_excel(df_cliente_pendentes,df_clientes_entregues),
@@ -627,20 +724,20 @@ if role == "admin":
                                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                             )
                         
-                with tab2:
+                with enviadas:
                     st.write("Acesse as notas fiscais das cargas já entregues e baixe os PDFs quando necessário.")           
                     st.header("Filtros:")
-                    col1,col2,col3 = st.columns(3)
+                    col1,col2,col3,col4,col5 = st.columns(5)
                     with col1:
                         df_filtrado_entregues = df_clientes_entregues.copy()
                         
                         datas_unicas = df_filtrado_entregues["DT_RECEBIMENTO"].unique().tolist()
-                        dt_recebimento_select = st.multiselect("Data Recebimento", datas_unicas, key="filtro_data")
+                        dt_recebimento_select = st.multiselect("DATA RECEBIMENTO:", datas_unicas, key="filtro_data")
                     if dt_recebimento_select:
                             df_filtrado_entregues = df_filtrado_entregues[df_filtrado_entregues["DT_RECEBIMENTO"].isin(dt_recebimento_select)]
                     with col2:
                         fornecedor_unicos = ["-"] + df_filtrado_entregues["FORNECEDOR"].unique().tolist()
-                        fornecedor_select = st.selectbox("Fornecedor:", fornecedor_unicos)
+                        fornecedor_select = st.selectbox("FORNECEDOR:", fornecedor_unicos)
                     if fornecedor_select:
                         if "-" in fornecedor_select:
                             pass
@@ -654,7 +751,19 @@ if role == "admin":
                             pass
                         else:
                             df_filtrado_entregues = df_filtrado_entregues[df_filtrado_entregues["N_NF"] == nf_select]  
-                        
+                    with col4:
+                        status_unicos = ["-"] + df_filtrado_entregues["STATUS"].unique().tolist()
+                        status_select = st.selectbox("STATUS:", status_unicos)
+                    if status_select:
+                        if "-" in status_select:
+                            pass
+                        else:
+                            df_filtrado_entregues = df_filtrado_entregues[df_filtrado_entregues["STATUS"] == status_select]  
+                    with col5:
+                        datas_unicas_envio = df_filtrado_entregues["DATA_ENVIO"].unique().tolist()
+                        dt_envio_select = st.multiselect("DATA ENVIO", datas_unicas_envio, key="filtro_data_envio")
+                    if dt_envio_select:
+                            df_filtrado_entregues = df_filtrado_entregues[df_filtrado_entregues["DATA_ENVIO"].isin(dt_envio_select)]        
                     if df_filtrado_entregues is not None and not df_filtrado_entregues.empty:
                         df_filtrado_entregues_exibicao = df_filtrado_entregues.copy()
                         df_filtrado_entregues_exibicao = df_filtrado_entregues_exibicao.rename(
@@ -667,7 +776,7 @@ if role == "admin":
                             }
                         )
                         df_filtrado_entregues_exibicao = df_filtrado_entregues_exibicao.set_index("DATA RECEBIMENTO") 
-                        st.dataframe(df_filtrado_entregues_exibicao[[ "NOTA FISCAL", "FORNECEDOR", "PESO", "CHAVE DA NOTA FISCAL", "STATUS DE ENVIO", "DATA DE ENTREGA"]], use_container_width=True)
+                        st.dataframe(df_filtrado_entregues_exibicao[["FORNECEDOR","NOTA FISCAL", "PESO", "CHAVE DA NOTA FISCAL", "STATUS DE ENVIO", "DATA DE ENTREGA"]], use_container_width=True)
                     else:
                         st.info("📢 Nenhuma carga entregue registrada até o momento.")  
             
@@ -710,7 +819,7 @@ elif role == "rip_servicos":
             # Conecta ao banco de dados e lê os registros em um DataFrame do pandas
             conn = get_db_connection()
             try:
-                df = pd.read_sql_query("SELECT * FROM notas_bolao", conn)
+                df = pd.read_sql_query("SELECT * FROM notas_bolao_teste", conn)
             except Exception as e:
                 st.error("Erro ao carregar os dados: " + str(e))
                 df = None
