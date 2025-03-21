@@ -137,7 +137,7 @@ def deletar_drive(df): #passamos o dataframe para função
 # Função para conectar ao banco---------------------------------------#
 def get_db_connection():
     # Conecta ao banco de dados SQLite criado anteriormente
-    conn = sqlite3.connect('notas_bolao.db')
+    conn = sqlite3.connect('notas_bolao_teste.db')
     return conn
 #---------------------------------------------------------------------#
 #---------------------------------------------------------------------#
@@ -150,7 +150,7 @@ def db_toexecel():
                 # Conecta ao banco de dados e lê os registros em um DataFrame do pandas
     conn = get_db_connection()
     try:
-        df = pd.read_sql_query("SELECT * FROM notas_bolao", conn)
+        df = pd.read_sql_query("SELECT * FROM notas_bolao_teste", conn)
     except Exception as e:
         st.error("Erro ao carregar os dados: " + str(e))
         df = None
@@ -273,6 +273,7 @@ def interface_filtros_entregues(df_entregues,key_dat_receb,key_fornecedor,key_nf
         st.dataframe(df_entregues_exibicao[["FORNECEDOR","NOTA FISCAL", "PESO", "CHAVE DA NOTA FISCAL", "STATUS DE ENVIO", "DATA DE ENTREGA"]], use_container_width=True)
     else:
         st.info("📢 Nenhuma carga entregue registrada até o momento.")
+    return df_entregues
 #---------------------------------------------------------------------#    
 #---------------------------------------------------------------------#
     
@@ -354,34 +355,51 @@ def criar_formulario_cadastro():
 #---------------------------------------------------------------------#
  
  
+#---------------------------------------------------------------------# 
+# Funçao que salva o pdf na pasta local-------------------------------#
+def salvar_pdf_local(pdf_file,dt_recebimento, fornecedor): 
+    # se um pdf foi inserido no formulario
+    if pdf_file is not None:
+        # definimos o nome da pasta
+        pdf_dir = "pdfs_teste"
+        # caso ela não exista criamos ela utilizando o nome definido
+        if not os.path.exists(pdf_dir):
+            # criando a pasta
+            os.makedirs(pdf_dir)
+        # definindo a data de recebimento formatada para salvar no nome do pdf
+        dt_recebimento_str = dt_recebimento.strftime("%Y%m%d")
+        # definindo o nome do fornecedor sem espaços e em caps lock para salvar o nome do pdf
+        fornecedor_str = fornecedor.replace(" ", "_").upper()
+        # criando a variavel que conterá a frase com o nome do pdf
+        pdf_filename = f"{dt_recebimento_str}_{n_nf}_{fornecedor_str}.pdf"
+        # criando o caminho completo 
+        pdf_path = os.path.join(pdf_dir, pdf_filename)
+        # abre o caminho
+        with open(pdf_path, "wb") as f:
+            # escreve o conteudo do buffer na pasta
+            f.write(pdf_file.getbuffer())
+    else:
+        # definimos o caminho como vazio
+        pdf_path = ""
+        pdf_filename = ""
+    return pdf_path,pdf_filename
+#---------------------------------------------------------------------#
+#---------------------------------------------------------------------#
+
  
- 
- 
- 
- 
- 
- 
- 
- 
- 
- 
- 
- 
- 
- 
- 
- 
- 
- 
- 
- 
- 
- 
- 
- 
- 
- 
- 
+#---------------------------------------------------------------------# 
+# Insere informações do formulário no banco de dados (cadastro)-------#
+def cadastro_bancodados(dt_recebimento, n_nf, peso, fornecedor, chave_nf, status, pdf_path):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("""
+        INSERT INTO notas_bolao_teste (DT_RECEBIMENTO, N_NF, PESO ,FORNECEDOR, CHAVE_NF , STATUS, CAMINHO_DO_PDF)
+        VALUES (?, ?, ?, ?,?, ?, ?)
+    """, (dt_recebimento.strftime("%Y-%m-%d"), n_nf, peso ,fornecedor, chave_nf, status, pdf_path))
+    conn.commit()
+    conn.close()
+#--------------------------------------------------------------------#
+#--------------------------------------------------------------------#
  
 
 
@@ -673,79 +691,14 @@ if role == "admin":
     # Na primeira aba    
     with cadastro:
         dt_recebimento, n_nf, peso, fornecedor, chave_nf, status, pdf_file, submit = criar_formulario_cadastro()
-        #---------------------------------------------------------------------#
-        # crio um formulario chamado form_inserir
-        # with st.form("form_inserir"):
-        #     # crio o imput de data definindo a chave da estancia
-        #     dt_recebimento = st.date_input("Data de Recebimento", key="dt_recebimento")
-        #     # crio o input de nota fiscal , definindo a chave da estancia
-        #     n_nf = st.text_input("Número da Nota Fiscal", key="n_nf")
-        #     # crio o input de peso , definindo a chave da estancia
-        #     peso = st.number_input("Peso da Nota Fiscal", key="peso")
-        #     # crio o input de fornecedor , definindo a chave da estancia
-        #     fornecedor = st.text_input("Fornecedor",key="fornecedor" )
-        #     # crio o input de chave nota fiscal , definindo a chave da estancia
-        #     chave_nf = st.text_input("Chave da Nota Fiscal", key="chave_nf")
-        #     # crio o input de status , definindo a chave da estancia
-        #     status = st.selectbox("Status", ["Pendente", "Cancelada"], key="status")
-        #     # crio o campo de uploade de pdf e defino a chave dele como a session_state pdf que foi definida anteriormente como chave aleatoria
-        #     pdf_file = st.file_uploader("Upload do PDF", type="pdf", key=st.session_state["pdf_file"])
-        #     # crio o botão de envio do formulario
-        #     submit = st.form_submit_button("Inserir Nota Fiscal")
-        #---------------------------------------------------------------------#
-        
-        
-        
-        #-----------------------------------------------------------------#
-        # Envio informações formulario------------------------------------#
         if submit:
-            # se um pdf foi inserido no formulario
-            if pdf_file is not None:
-                # definimos o nome da pasta
-                pdf_dir = "pdfs"
-                # caso ela não exista criamos ela utilizando o nome definido
-                if not os.path.exists(pdf_dir):
-                    # criando a pasta
-                    os.makedirs(pdf_dir)
-                # definindo a data de recebimento formatada para salvar no nome do pdf
-                dt_recebimento_str = dt_recebimento.strftime("%Y%m%d")
-                # definindo o nome do fornecedor sem espaços e em caps lock para salvar o nome do pdf
-                fornecedor_str = fornecedor.replace(" ", "_").upper()
-                # criando a variavel que conterá a frase com o nome do pdf
-                pdf_filename = f"{dt_recebimento_str}_{n_nf}_{fornecedor_str}.pdf"
-                # criando o caminho completo 
-                pdf_path = os.path.join(pdf_dir, pdf_filename)
-                # abre o caminho
-                with open(pdf_path, "wb") as f:
-                    # escreve o conteudo do buffer na pasta
-                    f.write(pdf_file.getbuffer())
-                # função que salva o pdf na pasta do google
-                drive_link = upload_to_drive(pdf_path, pdf_filename)
-                
-            # caso não tenha sido uplodado pdf 
+            pdf_path, pdf_filename = salvar_pdf_local(pdf_file, dt_recebimento, fornecedor)
+            cadastro_bancodados(dt_recebimento, n_nf, peso, fornecedor, chave_nf, status, pdf_path)
+            if not pdf_path:
+                st.warning("Cadastro realizado com sucesso, mas nota não foi salve na Nuvem")
+                time.sleep(3)
             else:
-                # definimos o caminho como vazio
-                pdf_path = ""
-            #-----------------------------------------------------------------#
-            
-            
-            
-            #-----------------------------------------------------------------#
-            # Insere os dados no banco de dados-------------------------------#
-            conn = get_db_connection()
-            cursor = conn.cursor()
-            cursor.execute("""
-                INSERT INTO notas_bolao (DT_RECEBIMENTO, N_NF, PESO ,FORNECEDOR, CHAVE_NF , STATUS, CAMINHO_DO_PDF)
-                VALUES (?, ?, ?, ?,?, ?, ?)
-            """, (dt_recebimento.strftime("%Y-%m-%d"), n_nf, peso ,fornecedor, chave_nf, status, pdf_path))
-            conn.commit()
-            conn.close()
-            #-----------------------------------------------------------------#
-            
-            
-            
-            #-----------------------------------------------------------------#
-            #Envio de mensagem de suceeso-------------------------------------#
+                drive_link = upload_to_drive(pdf_path, pdf_filename) # função que salva o pdf na pasta do google
             st.success("Nota fiscal inserida com sucesso!")
             # limpeza dos campos
             limpar_campos()
@@ -789,7 +742,7 @@ if role == "admin":
                         conn = get_db_connection() # realizamos a conexão com o banco de dados
                         cursor = conn.cursor() # criamos o cursor para poder navegar no banco
                         cursor.execute(""" 
-                                    UPDATE notas_bolao
+                                    UPDATE notas_bolao_teste
                                     SET STATUS = ? , DATA_ENVIO = ?
                                     WHERE STATUS = "Pendente"
                                     """, (novo_status, data_envio.strftime("%Y-%m-%d"))) # atraves do cursor executamos a query de atualizar a tabela, passamos os paramos de status e envio
@@ -808,8 +761,8 @@ if role == "admin":
                     st.header("Pendentes")
                     interface_filtros_pendentes(df_filtrado_pendentes, "data_exclusao_pendentes", "fornecedor_exclusao_pendente", "nf_exclusao_pendentes")
                     st.header("Enviados:")
-                    interface_filtros_entregues(df_filtrado_entregues, "data_exclusao_entregues", "fornecedor_exclusao_entregues", "nf_exclusao_entregues", "status_exclusao_entregues", "dt_envio_exclusao_entregues")
-                                                              
+                    df_entregues = interface_filtros_entregues(df_filtrado_entregues, "data_exclusao_entregues", "fornecedor_exclusao_entregues", "nf_exclusao_entregues", "status_exclusao_entregues", "dt_envio_exclusao_entregues")
+                    st.dataframe(df_entregues)                                          
                     
        #-----------------------------------------------------------------#
        #ABA VISAO CLIENTE------------------------------------------------# 
