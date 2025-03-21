@@ -137,7 +137,7 @@ def deletar_drive(df): #passamos o dataframe para função
 # Função para conectar ao banco---------------------------------------#
 def get_db_connection():
     # Conecta ao banco de dados SQLite criado anteriormente
-    conn = sqlite3.connect('notas_bolao_teste.db')
+    conn = sqlite3.connect('notas_bolao.db')
     return conn
 #---------------------------------------------------------------------#
 #---------------------------------------------------------------------#
@@ -472,7 +472,7 @@ if role == "admin":
                 # se um pdf foi inserido no formulario
                 if pdf_file is not None:
                     # definimos o nome da pasta
-                    pdf_dir = "pdfs_teste"
+                    pdf_dir = "pdfs"
                     # caso ela não exista criamos ela utilizando o nome definido
                     if not os.path.exists(pdf_dir):
                         # criando a pasta
@@ -505,7 +505,7 @@ if role == "admin":
                 conn = get_db_connection()
                 cursor = conn.cursor()
                 cursor.execute("""
-                    INSERT INTO notas_bolao_teste (DT_RECEBIMENTO, N_NF, PESO ,FORNECEDOR, CHAVE_NF , STATUS, CAMINHO_DO_PDF)
+                    INSERT INTO notas_bolao (DT_RECEBIMENTO, N_NF, PESO ,FORNECEDOR, CHAVE_NF , STATUS, CAMINHO_DO_PDF)
                     VALUES (?, ?, ?, ?,?, ?, ?)
                 """, (dt_recebimento.strftime("%Y-%m-%d"), n_nf, peso ,fornecedor, chave_nf, status, pdf_path))
                 conn.commit()
@@ -530,7 +530,7 @@ if role == "admin":
         with atualizaçao: # na aba atualização      
             #CONEXÃO COM O BANCO DE DADOS--------------------------------# 
             conn = get_db_connection() # Conectamos no banco de dados
-            df = pd.read_sql_query("SELECT * FROM notas_bolao_teste", conn) #selecionamos todos os dados da tabela e transformamos em um dataframe
+            df = pd.read_sql_query("SELECT * FROM notas_bolao", conn) #selecionamos todos os dados da tabela e transformamos em um dataframe
             conn.close() # fechamos a conexão com o banco de dados
             #------------------------------------------------------------#
             
@@ -563,7 +563,7 @@ if role == "admin":
                         conn = get_db_connection() # realizamos a conexão com o banco de dados
                         cursor = conn.cursor() # criamos o cursor para poder navegar no banco
                         cursor.execute(""" 
-                                    UPDATE notas_bolao_teste
+                                    UPDATE notas_bolao
                                     SET STATUS = ? , DATA_ENVIO = ?
                                     WHERE STATUS = "Pendente"
                                     """, (novo_status, data_envio.strftime("%Y-%m-%d"))) # atraves do cursor executamos a query de atualizar a tabela, passamos os paramos de status e envio
@@ -591,7 +591,7 @@ if role == "admin":
                 # Conecta ao banco de dados e lê os registros em um DataFrame do pandas
                 conn = get_db_connection()
                 try:
-                    df = pd.read_sql_query("SELECT * FROM notas_bolao_teste", conn)
+                    df = pd.read_sql_query("SELECT * FROM notas_bolao", conn)
                 except Exception as e:
                     st.error("Erro ao carregar os dados: " + str(e))
                     df = None
@@ -784,7 +784,7 @@ elif role == "rip_servicos":
             # Conecta ao banco de dados e lê os registros em um DataFrame do pandas
             conn = get_db_connection()
             try:
-                df = pd.read_sql_query("SELECT * FROM notas_bolao_teste", conn)
+                df = pd.read_sql_query("SELECT * FROM notas_bolao", conn)
             except Exception as e:
                 st.error("Erro ao carregar os dados: " + str(e))
                 df = None
