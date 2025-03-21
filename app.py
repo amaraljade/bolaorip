@@ -680,42 +680,7 @@ if role == "admin":
                                     st.rerun()
                             else:
                                 st.info("Nenhum ZIP disponível para download.")    
-                        
-                        
-                        
-                        
-                        
-                        
-                        
-                        
-                        
-                        
-                        
-                        
-                        
-                        
-                        
-                        
-                        
-                        
-                        
-                        
-                        
-                        # if st.button("📂 Gerar ZIP das Notas Fiscais selecionadas"):
-                        #     with st.spinner("Gerando ZIP, aguarde..."):
-                        #         # 🔽 Criar o ZIP apenas com os arquivos filtrados
-                        #         zip_buffer = baixar_zip_filtrado(df_filtrado_pendentes)
-
-                        #         if zip_buffer:
-                        #             st.download_button(
-                        #                 label="📥 Baixar ZIP com notas fiscais filtradas",
-                        #                 data=zip_buffer,
-                        #                 file_name="notas_fiscais_filtradas.zip",
-                        #                 mime="application/zip"
-                        #             )
-                        #         else:
-                        #             st.info("Nenhum arquivo foi encontrado para gerar o ZIP.")
-                            
+                                                    
                         with coluna_excel:
                             st.download_button(
                                 label="📥 Baixar Relatório Excel das NF disponiveis no Galpão",
