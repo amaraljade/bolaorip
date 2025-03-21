@@ -124,7 +124,7 @@ def deletar_drive(df): #passamos o dataframe para função
         arquivos_dict = {arquivo["name"]: arquivo["id"] for arquivo in arquivos_drive} # criamos um dicionario pegando o nome do arquivo e o ida para cada arquivo presente no dicionario
         if nome_pdf in arquivos_dict: # se o nome do pdf estiver presente no dicionario 
             file_id = arquivos_dict[nome_pdf] # armazenamos na variavel a busca do nome do pdf no dicionario
-            drive_service.files().delete(fileId=file_id).execute()   # usamos o objeto file e o metodo delete para deletar o arquivo pelo nome e executamos o processo
+            drive_service.files().delete(fileId=file_id,supportsAllDrives=True).execute()   # usamos o objeto file e o metodo delete para deletar o arquivo pelo nome e executamos o processo
             st.write(f"PDF {nome_pdf} deletado do Drive.") # exibimos ao usuario a mensagem de que o pdf foi deletado no drive
         else: # caso o nome do pdf não esteja presente no dicionario
             st.warning(f"PDF {nome_pdf} não encontrado no Drive!") # exibimos ao usuario a mensagem de erro
