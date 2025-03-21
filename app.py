@@ -145,6 +145,247 @@ def get_db_connection():
 
 
 #---------------------------------------------------------------------#
+# Função para retornar o dataframe com a consulta do banco de dados---#
+def db_toexecel():               
+                # Conecta ao banco de dados e lê os registros em um DataFrame do pandas
+    conn = get_db_connection()
+    try:
+        df = pd.read_sql_query("SELECT * FROM notas_bolao", conn)
+    except Exception as e:
+        st.error("Erro ao carregar os dados: " + str(e))
+        df = None
+    finally:
+        conn.close()
+    return df
+#---------------------------------------------------------------------#
+#---------------------------------------------------------------------#
+
+
+
+#---------------------------------------------------------------------#
+# Função Dataframe Pendentes e Entregues------------------------------#
+def gerar_dataframe_p_e():
+    df = db_toexecel()
+    if df is not None and not df.empty:
+                        df_cliente_pendentes = df[df["STATUS"] == "Pendente"]
+                        df_clientes_entregues = df[(df["STATUS"] == "Entregue") | (df["STATUS"] == "Mantovani")]
+                        
+                        df_filtrado_pendentes = df_cliente_pendentes.copy()
+                        df_filtrado_entregues = df_clientes_entregues.copy()
+    return df_filtrado_pendentes,df_filtrado_entregues
+#---------------------------------------------------------------------#
+#---------------------------------------------------------------------#
+
+
+
+#---------------------------------------------------------------------#
+# Função Interface Filtro - Pendentes---------------------------------#
+def interface_filtros_pendentes(df_pendentes,key_data,key_fornecedor,key_nf):                        
+    col1,col2,col3 = st.columns(3)
+    with col1:
+        datas_unicas = df_pendentes["DT_RECEBIMENTO"].unique().tolist()
+        dt_recebimento_select = st.multiselect("Data Recebimento", datas_unicas, key=key_data)
+    if dt_recebimento_select:
+            df_pendentes = df_pendentes[df_pendentes["DT_RECEBIMENTO"].isin(dt_recebimento_select)]                        
+    with col2:
+        fornecedor_unicos = ["-"] + df_pendentes["FORNECEDOR"].unique().tolist()
+        fornecedor_select = st.selectbox("Fornecedor:", fornecedor_unicos, key=key_fornecedor)
+    if fornecedor_select:
+        if "-" in fornecedor_select:
+            pass
+        else:
+            df_pendentes = df_pendentes[df_pendentes["FORNECEDOR"] == fornecedor_select]
+    with col3:
+        nf_unicas = ["-"] + df_pendentes["N_NF"].unique().tolist()
+        nf_select = st.selectbox("NF'S:", nf_unicas, key=key_nf)
+    if nf_select:
+        if "-" in nf_select:
+            pass
+        else:
+            df_pendentes = df_pendentes[df_pendentes["N_NF"] == nf_select]  
+                        
+    df_pendentes = df_filtrado_pendentes.copy()
+    df_pendentes = df_pendentes.rename(
+        columns={
+                "DT_RECEBIMENTO" : "DATA RECEBIMENTO",
+                "N_NF" : "NOTA FISCAL",
+                "CHAVE_NF" : "CHAVE DA NOTA FISCAL",
+                "STATUS" : "STATUS DE ENVIO"
+        }
+    )
+    df_pendentes = df_pendentes.set_index("DATA RECEBIMENTO")      
+    st.dataframe(df_pendentes[[ "NOTA FISCAL", "FORNECEDOR", "PESO", "CHAVE DA NOTA FISCAL", "STATUS DE ENVIO"]], use_container_width=True)
+    #---------------------------------------------------------------------#
+    #---------------------------------------------------------------------#
+    
+    
+    
+    #---------------------------------------------------------------------#
+    #Função interface Filtros - Entregues---------------------------------#
+def interface_filtros_entregues(df_entregues,key_dat_receb,key_fornecedor,key_nf,key_status,key_dt_envio):
+    col1,col2,col3,col4,col5 = st.columns(5)
+    with col1:   
+        datas_unicas = df_entregues["DT_RECEBIMENTO"].unique().tolist()
+        dt_recebimento_select = st.multiselect("DATA RECEBIMENTO:", datas_unicas, key=key_dat_receb)
+    if dt_recebimento_select:
+            df_entregues = df_entregues[df_entregues["DT_RECEBIMENTO"].isin(dt_recebimento_select)]
+    with col2:
+        fornecedor_unicos = ["-"] + df_entregues["FORNECEDOR"].unique().tolist()
+        fornecedor_select = st.selectbox("FORNECEDOR:", fornecedor_unicos,key=key_fornecedor)
+    if fornecedor_select:
+        if "-" in fornecedor_select:
+            pass
+        else:
+            df_entregues = df_entregues[df_entregues["FORNECEDOR"] == fornecedor_select]
+    with col3:
+        nf_unicas = ["-"] + df_entregues["N_NF"].unique().tolist()
+        nf_select = st.selectbox("NF'S:", nf_unicas, key=key_nf)
+    if nf_select:
+        if "-" in nf_select:
+            pass
+        else:
+            df_entregues = df_entregues[df_entregues["N_NF"] == nf_select]  
+    with col4:
+        status_unicos = ["-"] + df_entregues["STATUS"].unique().tolist()
+        status_select = st.selectbox("STATUS:", status_unicos, key=key_status)
+    if status_select:
+        if "-" in status_select:
+            pass
+        else:
+            df_entregues = df_entregues[df_entregues["STATUS"] == status_select]  
+    with col5:
+        datas_unicas_envio = df_entregues["DATA_ENVIO"].unique().tolist()
+        dt_envio_select = st.multiselect("DATA ENVIO", datas_unicas_envio, key=key_dt_envio)
+    if dt_envio_select:
+            df_entregues = df_entregues[df_entregues["DATA_ENVIO"].isin(dt_envio_select)]        
+    if df_entregues is not None and not df_entregues.empty:
+        df_entregues_exibicao = df_entregues.copy()
+        df_entregues_exibicao = df_entregues_exibicao.rename(
+            columns={
+                "DT_RECEBIMENTO" : "DATA RECEBIMENTO",
+                "N_NF" : "NOTA FISCAL",
+                "CHAVE_NF" : "CHAVE DA NOTA FISCAL",
+                "STATUS" : "STATUS DE ENVIO",
+                "DATA_ENVIO" : "DATA DE ENTREGA"
+            }
+        )
+        df_entregues_exibicao = df_entregues_exibicao.set_index("DATA RECEBIMENTO") 
+        st.dataframe(df_entregues_exibicao[["FORNECEDOR","NOTA FISCAL", "PESO", "CHAVE DA NOTA FISCAL", "STATUS DE ENVIO", "DATA DE ENTREGA"]], use_container_width=True)
+    else:
+        st.info("📢 Nenhuma carga entregue registrada até o momento.")
+#---------------------------------------------------------------------#    
+#---------------------------------------------------------------------#
+    
+    
+    
+#---------------------------------------------------------------------#
+# Função botões de Download , EXCEL E PDF
+def botoes_excel_pdf(df_pendentes_filtrados, df_pendentes, df_entregues):
+    coluna_zip,coluna_excel = st.columns(2)
+    with coluna_zip:                   
+        if not st.session_state["zip_ready"]:
+            # Só mostra o botão "Gerar ZIP" se ainda não geramos
+            if coluna_zip.button("📂 Gerar ZIP das Notas Fiscais selecionadas"):
+                with st.spinner("⏳ Gerando ZIP, aguarde..."):
+                    # Aqui chamamos a função que gera o ZIP
+                    zip_buffer = baixar_zip_filtrado(df_pendentes_filtrados)
+                    
+                    if zip_buffer:
+                        # Armazena o buffer no session_state
+                        st.session_state["zip_buffer"] = zip_buffer
+                        # Marca que o ZIP está pronto
+                        st.session_state["zip_ready"] = True
+                        st.success("✅ ZIP gerado com sucesso!")
+                        time.sleep(0.5)
+                        st.rerun()
+                    else:
+                        st.info("Nenhum arquivo foi encontrado para gerar o ZIP.")
+        else:
+            # Se zip_ready = True, exibimos o botão de download
+            if st.session_state["zip_buffer"]:
+                if coluna_zip.download_button(
+                    label="📥 Baixar ZIP com notas fiscais filtradas",
+                    data=st.session_state["zip_buffer"],
+                    file_name="notas_fiscais_filtradas.zip",
+                    mime="application/zip"
+                ):
+                    time.sleep(0.5)
+                    st.session_state["zip_ready"] = False
+                    st.session_state["zip_buffer"] = None
+                    st.rerun()
+            else:
+                st.info("Nenhum ZIP disponível para download.")    
+                                    
+        with coluna_excel:
+            st.download_button(
+                label="📥 Baixar Relatório Excel das NF disponiveis no Galpão",
+                data=to_excel(df_pendentes,df_entregues),
+                file_name="relatorio_notas_bolao.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            )
+#---------------------------------------------------------------------#
+#---------------------------------------------------------------------#
+ 
+ 
+ 
+ #---------------------------------------------------------------------#
+ # Função criar formulario de cadastro de nota recebida----------------#
+def criar_formulario_cadastro():
+    with st.form("form_inserir"):
+        # crio o imput de data definindo a chave da estancia
+        dt_recebimento = st.date_input("Data de Recebimento", key="dt_recebimento")
+        # crio o input de nota fiscal , definindo a chave da estancia
+        n_nf = st.text_input("Número da Nota Fiscal", key="n_nf")
+        # crio o input de peso , definindo a chave da estancia
+        peso = st.number_input("Peso da Nota Fiscal", key="peso")
+        # crio o input de fornecedor , definindo a chave da estancia
+        fornecedor = st.text_input("Fornecedor",key="fornecedor" )
+        # crio o input de chave nota fiscal , definindo a chave da estancia
+        chave_nf = st.text_input("Chave da Nota Fiscal", key="chave_nf")
+        # crio o input de status , definindo a chave da estancia
+        status = st.selectbox("Status", ["Pendente", "Cancelada"], key="status")
+        # crio o campo de uploade de pdf e defino a chave dele como a session_state pdf que foi definida anteriormente como chave aleatoria
+        pdf_file = st.file_uploader("Upload do PDF", type="pdf", key=st.session_state["pdf_file"])
+        # crio o botão de envio do formulario
+        submit = st.form_submit_button("Inserir Nota Fiscal")
+
+    return dt_recebimento, n_nf, peso, fornecedor, chave_nf, status, pdf_file, submit
+#---------------------------------------------------------------------#
+#---------------------------------------------------------------------#
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+
+#---------------------------------------------------------------------#
 #--- Configurando como se comportara a pagina do streamlit------------#
 st.set_page_config(
     # Titulo da pagina a ser exibido no navegador
@@ -416,123 +657,108 @@ if role == "admin":
     if "pdf_file" not in st.session_state:
         # se não foi estancio com uma chave aleatoria para poder limpar o campo depois
         st.session_state["pdf_file"] = str(uuid.uuid4())
-        
-        
-        
-        
-        
-        
-        
+    # verifico se a leitura do zip foi estanciado                                                        
     if "zip_ready" not in st.session_state:
         st.session_state["zip_ready"] = False
-
+    # verifico se existe um zip_buffer
     if "zip_buffer" not in st.session_state:
         st.session_state["zip_buffer"] = None    
-        
-        
-        
-        
-        
-        
-        
-        
 #---------------------------------------------------------------------#
 #---------------------------------------------------------------------#        
+
+
     
 #---------------------------------------------------------------------#
 # TELA CADASTRO - MODO ADMINISTRADOR----------------------------------# 
     # Na primeira aba    
     with cadastro:
+        dt_recebimento, n_nf, peso, fornecedor, chave_nf, status, pdf_file, submit = criar_formulario_cadastro()
         #---------------------------------------------------------------------#
         # crio um formulario chamado form_inserir
-        with st.form("form_inserir"):
-            # crio o imput de data definindo a chave da estancia
-            dt_recebimento = st.date_input("Data de Recebimento", key="dt_recebimento")
-            # crio o input de nota fiscal , definindo a chave da estancia
-            n_nf = st.text_input("Número da Nota Fiscal", key="n_nf")
-            # crio o input de peso , definindo a chave da estancia
-            peso = st.number_input("Peso da Nota Fiscal", key="peso")
-            # crio o input de fornecedor , definindo a chave da estancia
-            fornecedor = st.text_input("Fornecedor",key="fornecedor" )
-            # crio o input de chave nota fiscal , definindo a chave da estancia
-            chave_nf = st.text_input("Chave da Nota Fiscal", key="chave_nf")
-            # crio o input de status , definindo a chave da estancia
-            status = st.selectbox("Status", ["Pendente", "Cancelada"], key="status")
-            # crio o campo de uploade de pdf e defino a chave dele como a session_state pdf que foi definida anteriormente como chave aleatoria
-            pdf_file = st.file_uploader("Upload do PDF", type="pdf", key=st.session_state["pdf_file"])
-            # crio o botão de envio do formulario
-            submit = st.form_submit_button("Inserir Nota Fiscal")
+        # with st.form("form_inserir"):
+        #     # crio o imput de data definindo a chave da estancia
+        #     dt_recebimento = st.date_input("Data de Recebimento", key="dt_recebimento")
+        #     # crio o input de nota fiscal , definindo a chave da estancia
+        #     n_nf = st.text_input("Número da Nota Fiscal", key="n_nf")
+        #     # crio o input de peso , definindo a chave da estancia
+        #     peso = st.number_input("Peso da Nota Fiscal", key="peso")
+        #     # crio o input de fornecedor , definindo a chave da estancia
+        #     fornecedor = st.text_input("Fornecedor",key="fornecedor" )
+        #     # crio o input de chave nota fiscal , definindo a chave da estancia
+        #     chave_nf = st.text_input("Chave da Nota Fiscal", key="chave_nf")
+        #     # crio o input de status , definindo a chave da estancia
+        #     status = st.selectbox("Status", ["Pendente", "Cancelada"], key="status")
+        #     # crio o campo de uploade de pdf e defino a chave dele como a session_state pdf que foi definida anteriormente como chave aleatoria
+        #     pdf_file = st.file_uploader("Upload do PDF", type="pdf", key=st.session_state["pdf_file"])
+        #     # crio o botão de envio do formulario
+        #     submit = st.form_submit_button("Inserir Nota Fiscal")
         #---------------------------------------------------------------------#
         
         
         
+        #-----------------------------------------------------------------#
+        # Envio informações formulario------------------------------------#
+        if submit:
+            # se um pdf foi inserido no formulario
+            if pdf_file is not None:
+                # definimos o nome da pasta
+                pdf_dir = "pdfs"
+                # caso ela não exista criamos ela utilizando o nome definido
+                if not os.path.exists(pdf_dir):
+                    # criando a pasta
+                    os.makedirs(pdf_dir)
+                # definindo a data de recebimento formatada para salvar no nome do pdf
+                dt_recebimento_str = dt_recebimento.strftime("%Y%m%d")
+                # definindo o nome do fornecedor sem espaços e em caps lock para salvar o nome do pdf
+                fornecedor_str = fornecedor.replace(" ", "_").upper()
+                # criando a variavel que conterá a frase com o nome do pdf
+                pdf_filename = f"{dt_recebimento_str}_{n_nf}_{fornecedor_str}.pdf"
+                # criando o caminho completo 
+                pdf_path = os.path.join(pdf_dir, pdf_filename)
+                # abre o caminho
+                with open(pdf_path, "wb") as f:
+                    # escreve o conteudo do buffer na pasta
+                    f.write(pdf_file.getbuffer())
+                # função que salva o pdf na pasta do google
+                drive_link = upload_to_drive(pdf_path, pdf_filename)
+                
+            # caso não tenha sido uplodado pdf 
+            else:
+                # definimos o caminho como vazio
+                pdf_path = ""
             #-----------------------------------------------------------------#
-            # Envio informações formulario------------------------------------#
-            if submit:
-                # se um pdf foi inserido no formulario
-                if pdf_file is not None:
-                    # definimos o nome da pasta
-                    pdf_dir = "pdfs"
-                    # caso ela não exista criamos ela utilizando o nome definido
-                    if not os.path.exists(pdf_dir):
-                        # criando a pasta
-                        os.makedirs(pdf_dir)
-                    # definindo a data de recebimento formatada para salvar no nome do pdf
-                    dt_recebimento_str = dt_recebimento.strftime("%Y%m%d")
-                    # definindo o nome do fornecedor sem espaços e em caps lock para salvar o nome do pdf
-                    fornecedor_str = fornecedor.replace(" ", "_").upper()
-                    # criando a variavel que conterá a frase com o nome do pdf
-                    pdf_filename = f"{dt_recebimento_str}_{n_nf}_{fornecedor_str}.pdf"
-                    # criando o caminho completo 
-                    pdf_path = os.path.join(pdf_dir, pdf_filename)
-                    # abre o caminho
-                    with open(pdf_path, "wb") as f:
-                        # escreve o conteudo do buffer na pasta
-                        f.write(pdf_file.getbuffer())
-                    # função que salva o pdf na pasta do google
-                    drive_link = upload_to_drive(pdf_path, pdf_filename)
-                    
-                # caso não tenha sido uplodado pdf 
-                else:
-                    # definimos o caminho como vazio
-                    pdf_path = ""
-                #-----------------------------------------------------------------#
-                
-                
-                
-                #-----------------------------------------------------------------#
-                # Insere os dados no banco de dados-------------------------------#
-                conn = get_db_connection()
-                cursor = conn.cursor()
-                cursor.execute("""
-                    INSERT INTO notas_bolao (DT_RECEBIMENTO, N_NF, PESO ,FORNECEDOR, CHAVE_NF , STATUS, CAMINHO_DO_PDF)
-                    VALUES (?, ?, ?, ?,?, ?, ?)
-                """, (dt_recebimento.strftime("%Y-%m-%d"), n_nf, peso ,fornecedor, chave_nf, status, pdf_path))
-                conn.commit()
-                conn.close()
-                #-----------------------------------------------------------------#
-                
-                
-                
-                #-----------------------------------------------------------------#
-                #Envio de mensagem de suceeso-------------------------------------#
-                st.success("Nota fiscal inserida com sucesso!")
-                # limpeza dos campos
-                limpar_campos()
-                # atualização da tela
-                st.rerun()
-                #-----------------------------------------------------------------#
+            
+            
+            
+            #-----------------------------------------------------------------#
+            # Insere os dados no banco de dados-------------------------------#
+            conn = get_db_connection()
+            cursor = conn.cursor()
+            cursor.execute("""
+                INSERT INTO notas_bolao (DT_RECEBIMENTO, N_NF, PESO ,FORNECEDOR, CHAVE_NF , STATUS, CAMINHO_DO_PDF)
+                VALUES (?, ?, ?, ?,?, ?, ?)
+            """, (dt_recebimento.strftime("%Y-%m-%d"), n_nf, peso ,fornecedor, chave_nf, status, pdf_path))
+            conn.commit()
+            conn.close()
+            #-----------------------------------------------------------------#
+            
+            
+            
+            #-----------------------------------------------------------------#
+            #Envio de mensagem de suceeso-------------------------------------#
+            st.success("Nota fiscal inserida com sucesso!")
+            # limpeza dos campos
+            limpar_campos()
+            # atualização da tela
+            st.rerun()
+            #-----------------------------------------------------------------#
                 
                 
                 
        #-----------------------------------------------------------------#
        #ABA ATUALIZAÇÃO--------------------------------------------------#         
-        with atualizaçao: # na aba atualização      
-            #CONEXÃO COM O BANCO DE DADOS--------------------------------# 
-            conn = get_db_connection() # Conectamos no banco de dados
-            df = pd.read_sql_query("SELECT * FROM notas_bolao", conn) #selecionamos todos os dados da tabela e transformamos em um dataframe
-            conn.close() # fechamos a conexão com o banco de dados
-            #------------------------------------------------------------#
+        with atualizaçao: # na aba atualização
+            df = db_toexecel()      
             
             #VERIFICAÇÃO DO DATAFRAME------------------------------------#
             if df.empty: # se o dataframe estiver vazio
@@ -576,8 +802,14 @@ if role == "admin":
                         st.rerun() # atualizamos
        #-----------------------------------------------------------------#
        #-----------------------------------------------------------------#                 
-                        
-                        
+                st.divider()
+                with st.expander("Exclusão lançamento:", expanded=True):
+                    df_filtrado_pendentes, df_filtrado_entregues = gerar_dataframe_p_e()
+                    st.header("Pendentes")
+                    interface_filtros_pendentes(df_filtrado_pendentes, "data_exclusao_pendentes", "fornecedor_exclusao_pendente", "nf_exclusao_pendentes")
+                    st.header("Enviados:")
+                    interface_filtros_entregues(df_filtrado_entregues, "data_exclusao_entregues", "fornecedor_exclusao_entregues", "nf_exclusao_entregues", "status_exclusao_entregues", "dt_envio_exclusao_entregues")
+                                                              
                     
        #-----------------------------------------------------------------#
        #ABA VISAO CLIENTE------------------------------------------------# 
@@ -585,166 +817,16 @@ if role == "admin":
             st.logo(logo,size="large") 
             st.title("Painel do Cliente")
             armazenadas,enviadas = st.tabs(["📦  Armazenadas", "✅ Enviadas"])
-            with armazenadas:
-                st.markdown("📂 Lista de mercadorias armazenadas no galpão e suas respectivas notas fiscais disponíveis para download.")   
-
-                # Conecta ao banco de dados e lê os registros em um DataFrame do pandas
-                conn = get_db_connection()
-                try:
-                    df = pd.read_sql_query("SELECT * FROM notas_bolao", conn)
-                except Exception as e:
-                    st.error("Erro ao carregar os dados: " + str(e))
-                    df = None
-                finally:
-                    conn.close()
-
-                # Se existirem dados, exibe-os
-                if df is not None and not df.empty:
-                    df_cliente_pendentes = df[df["STATUS"] == "Pendente"]
-                    df_clientes_entregues = df[(df["STATUS"] == "Entregue") | (df["STATUS"] == "Mantovani")]
-                    
-                    df_filtrado_pendentes = df_cliente_pendentes.copy()
-
-                    
+            with armazenadas:   
+                df_filtrado_pendentes, df_filtrado_entregues = gerar_dataframe_p_e()
+                st.header("Filtros:")
+                interface_filtros_pendentes(df_filtrado_pendentes, "data_visao_cliente_pendentes", "fornecedor_visao_cliente_pendentes", "nf_visao_cliente_pendentes")
+                df_cliente_pendentes, df_clientes_entregues = gerar_dataframe_p_e()   
+                botoes_excel_pdf(df_filtrado_pendentes,df_cliente_pendentes, df_clientes_entregues)             
+                with enviadas:           
                     st.header("Filtros:")
-                    col1,col2,col3 = st.columns(3)
-                    with col1:
-                        datas_unicas = df_filtrado_pendentes["DT_RECEBIMENTO"].unique().tolist()
-                        dt_recebimento_select = st.multiselect("DATA RECEBIMENTO:", datas_unicas)
-                    if dt_recebimento_select:
-                            df_filtrado_pendentes = df_filtrado_pendentes[df_filtrado_pendentes["DT_RECEBIMENTO"].isin(dt_recebimento_select)]
-                        
-                    with col2:
-                        fornecedor_unicos = ["-"] + df_filtrado_pendentes["FORNECEDOR"].unique().tolist()
-                        fornecedor_select = st.selectbox("FORNECEDOR:", fornecedor_unicos)
-                    if fornecedor_select:
-                        if "-" in fornecedor_select:
-                            pass
-                        else:
-                            df_filtrado_pendentes = df_filtrado_pendentes[df_filtrado_pendentes["FORNECEDOR"] == fornecedor_select]
-                    with col3:
-                        nf_unicas = ["-"] + df_filtrado_pendentes["N_NF"].unique().tolist()
-                        nf_select = st.selectbox("NF'S:", nf_unicas)
-                    if nf_select:
-                        if "-" in nf_select:
-                            pass
-                    else:
-                        df_filtrado_pendentes = df_filtrado_pendentes[df_filtrado_pendentes["N_NF"] == nf_select]  
-                    
-                    
-                    df_filtrado_pendentes_exibicao = df_filtrado_pendentes.copy()
-                    df_filtrado_pendentes_exibicao = df_filtrado_pendentes_exibicao.rename(
-                        columns={
-                                "DT_RECEBIMENTO" : "DATA RECEBIMENTO",
-                                "N_NF" : "NOTA FISCAL",
-                                "CHAVE_NF" : "CHAVE DA NOTA FISCAL",
-                                "STATUS" : "STATUS DE ENVIO"
-                        }
-                    )
-                    
-                    df_filtrado_pendentes_exibicao = df_filtrado_pendentes_exibicao.set_index("DATA RECEBIMENTO")      
-                    st.dataframe(df_filtrado_pendentes_exibicao[[ "FORNECEDOR","NOTA FISCAL","PESO", "CHAVE DA NOTA FISCAL", "STATUS DE ENVIO"]], use_container_width=True)
+                    interface_filtros_entregues(df_filtrado_entregues, "data_visaocliente_entregues", "fornecedor_visaocliente_entregues", "nf_visaocliente_entregues", "status_visaocliente_entregues", "dt_envio_visaocliente_entregues")
 
-                        
-                    coluna_zip,coluna_excel = st.columns(2)
-                    with coluna_zip:                   
-                        if not st.session_state["zip_ready"]:
-                            # Só mostra o botão "Gerar ZIP" se ainda não geramos
-                            if coluna_zip.button("📂 Gerar ZIP das Notas Fiscais selecionadas"):
-                                with st.spinner("⏳ Gerando ZIP, aguarde..."):
-                                    # Aqui chamamos a função que gera o ZIP
-                                    zip_buffer = baixar_zip_filtrado(df_filtrado_pendentes)
-                                    
-                                    if zip_buffer:
-                                        # Armazena o buffer no session_state
-                                        st.session_state["zip_buffer"] = zip_buffer
-                                        # Marca que o ZIP está pronto
-                                        st.session_state["zip_ready"] = True
-                                        st.success("✅ ZIP gerado com sucesso!")
-                                        time.sleep(0.5)
-                                        st.rerun()
-                                    else:
-                                        st.info("Nenhum arquivo foi encontrado para gerar o ZIP.")
-                        else:
-                            # Se zip_ready = True, exibimos o botão de download
-                            if st.session_state["zip_buffer"]:
-                                if coluna_zip.download_button(
-                                    label="📥 Baixar ZIP com notas fiscais filtradas",
-                                    data=st.session_state["zip_buffer"],
-                                    file_name="notas_fiscais_filtradas.zip",
-                                    mime="application/zip"
-                                ):
-                                    time.sleep(0.5)
-                                    st.session_state["zip_ready"] = False
-                                    st.session_state["zip_buffer"] = None
-                                    st.rerun()
-                            else:
-                                st.info("Nenhum ZIP disponível para download.")    
-                                                    
-                        with coluna_excel:
-                            st.download_button(
-                                label="📥 Baixar Relatório Excel das NF disponiveis no Galpão",
-                                data=to_excel(df_cliente_pendentes,df_clientes_entregues),
-                                file_name="relatorio_notas_bolao.xlsx",
-                                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                            )
-                        
-                with enviadas:
-                    st.write("Acesse as notas fiscais das cargas já entregues e baixe os PDFs quando necessário.")           
-                    st.header("Filtros:")
-                    col1,col2,col3,col4,col5 = st.columns(5)
-                    with col1:
-                        df_filtrado_entregues = df_clientes_entregues.copy()
-                        
-                        datas_unicas = df_filtrado_entregues["DT_RECEBIMENTO"].unique().tolist()
-                        dt_recebimento_select = st.multiselect("DATA RECEBIMENTO:", datas_unicas, key="filtro_data")
-                    if dt_recebimento_select:
-                            df_filtrado_entregues = df_filtrado_entregues[df_filtrado_entregues["DT_RECEBIMENTO"].isin(dt_recebimento_select)]
-                    with col2:
-                        fornecedor_unicos = ["-"] + df_filtrado_entregues["FORNECEDOR"].unique().tolist()
-                        fornecedor_select = st.selectbox("FORNECEDOR:", fornecedor_unicos)
-                    if fornecedor_select:
-                        if "-" in fornecedor_select:
-                            pass
-                        else:
-                            df_filtrado_entregues = df_filtrado_entregues[df_filtrado_entregues["FORNECEDOR"] == fornecedor_select]
-                    with col3:
-                        nf_unicas = ["-"] + df_filtrado_entregues["N_NF"].unique().tolist()
-                        nf_select = st.selectbox("NF'S:", nf_unicas)
-                    if nf_select:
-                        if "-" in nf_select:
-                            pass
-                        else:
-                            df_filtrado_entregues = df_filtrado_entregues[df_filtrado_entregues["N_NF"] == nf_select]  
-                    with col4:
-                        status_unicos = ["-"] + df_filtrado_entregues["STATUS"].unique().tolist()
-                        status_select = st.selectbox("STATUS:", status_unicos)
-                    if status_select:
-                        if "-" in status_select:
-                            pass
-                        else:
-                            df_filtrado_entregues = df_filtrado_entregues[df_filtrado_entregues["STATUS"] == status_select]  
-                    with col5:
-                        datas_unicas_envio = df_filtrado_entregues["DATA_ENVIO"].unique().tolist()
-                        dt_envio_select = st.multiselect("DATA ENVIO", datas_unicas_envio, key="filtro_data_envio")
-                    if dt_envio_select:
-                            df_filtrado_entregues = df_filtrado_entregues[df_filtrado_entregues["DATA_ENVIO"].isin(dt_envio_select)]        
-                    if df_filtrado_entregues is not None and not df_filtrado_entregues.empty:
-                        df_filtrado_entregues_exibicao = df_filtrado_entregues.copy()
-                        df_filtrado_entregues_exibicao = df_filtrado_entregues_exibicao.rename(
-                            columns={
-                                "DT_RECEBIMENTO" : "DATA RECEBIMENTO",
-                                "N_NF" : "NOTA FISCAL",
-                                "CHAVE_NF" : "CHAVE DA NOTA FISCAL",
-                                "STATUS" : "STATUS DE ENVIO",
-                                "DATA_ENVIO" : "DATA DE ENTREGA"
-                            }
-                        )
-                        df_filtrado_entregues_exibicao = df_filtrado_entregues_exibicao.set_index("DATA RECEBIMENTO") 
-                        st.dataframe(df_filtrado_entregues_exibicao[["FORNECEDOR","NOTA FISCAL", "PESO", "CHAVE DA NOTA FISCAL", "STATUS DE ENVIO", "DATA DE ENTREGA"]], use_container_width=True)
-                    else:
-                        st.info("📢 Nenhuma carga entregue registrada até o momento.")  
-            
           
                             
                         
@@ -777,132 +859,15 @@ elif role == "rip_servicos":
 
         st.logo(logo,size="large") 
         st.title("Painel do Cliente")
-        tab1,tab2 = st.tabs(["📦  Armazenadas", "✅ Enviadas"])
-        with tab1:
+        armazenadas,enviadas = st.tabs(["📦  Armazenadas", "✅ Enviadas"])
+        with armazenadas:
             st.markdown("📂 Lista de mercadorias armazenadas no galpão e suas respectivas notas fiscais disponíveis para download.")   
-
-            # Conecta ao banco de dados e lê os registros em um DataFrame do pandas
-            conn = get_db_connection()
-            try:
-                df = pd.read_sql_query("SELECT * FROM notas_bolao", conn)
-            except Exception as e:
-                st.error("Erro ao carregar os dados: " + str(e))
-                df = None
-            finally:
-                conn.close()
-
-            # Se existirem dados, exibe-os
-            if df is not None and not df.empty:
-                df_cliente_pendentes = df[df["STATUS"] == "Pendente"]
-                df_clientes_entregues = df[(df["STATUS"] == "Entregue") | (df["STATUS"] == "Mantovani")]
-                
-                df_filtrado_pendentes = df_cliente_pendentes.copy()
-
-                
-                st.header("Filtros:")
-                col1,col2,col3 = st.columns(3)
-                with col1:
-                    datas_unicas = df_filtrado_pendentes["DT_RECEBIMENTO"].unique().tolist()
-                    dt_recebimento_select = st.multiselect("Data Recebimento", datas_unicas)
-                if dt_recebimento_select:
-                        df_filtrado_pendentes = df_filtrado_pendentes[df_filtrado_pendentes["DT_RECEBIMENTO"].isin(dt_recebimento_select)]
-                    
-                with col2:
-                    fornecedor_unicos = ["-"] + df_filtrado_pendentes["FORNECEDOR"].unique().tolist()
-                    fornecedor_select = st.selectbox("Fornecedor:", fornecedor_unicos)
-                if fornecedor_select:
-                    if "-" in fornecedor_select:
-                        pass
-                    else:
-                        df_filtrado_pendentes = df_filtrado_pendentes[df_filtrado_pendentes["FORNECEDOR"] == fornecedor_select]
-                with col3:
-                    nf_unicas = ["-"] + df_filtrado_pendentes["N_NF"].unique().tolist()
-                    nf_select = st.selectbox("NF'S:", nf_unicas)
-                if nf_select:
-                    if "-" in nf_select:
-                        pass
-                    else:
-                      df_filtrado_pendentes = df_filtrado_pendentes[df_filtrado_pendentes["N_NF"] == nf_select]  
-                
-                df_filtrado_pendentes_exibicao = df_filtrado_pendentes.copy()
-                df_filtrado_pendentes_exibicao = df_filtrado_pendentes_exibicao.rename(
-                    columns={
-                            "DT_RECEBIMENTO" : "DATA RECEBIMENTO",
-                            "N_NF" : "NOTA FISCAL",
-                            "CHAVE_NF" : "CHAVE DA NOTA FISCAL",
-                            "STATUS" : "STATUS DE ENVIO"
-                    }
-                )
-                 
-                df_filtrado_pendentes_exibicao = df_filtrado_pendentes_exibicao.set_index("DATA RECEBIMENTO")      
-                st.dataframe(df_filtrado_pendentes_exibicao[[ "NOTA FISCAL", "FORNECEDOR", "PESO", "CHAVE DA NOTA FISCAL", "STATUS DE ENVIO"]], use_container_width=True)
-
-                    
-                col1,col2 = st.columns(2)
-                with col1:
-                    if st.button("📂 Gerar ZIP das Notas Fiscais selecionadas"):
-                        with st.spinner("Gerando ZIP, aguarde..."):
-                            # 🔽 Criar o ZIP apenas com os arquivos filtrados
-                            zip_buffer = baixar_zip_filtrado(df_filtrado_pendentes)
-
-                            if zip_buffer:
-                                st.download_button(
-                                    label="📥 Baixar ZIP com notas fiscais filtradas",
-                                    data=zip_buffer,
-                                    file_name="notas_fiscais_filtradas.zip",
-                                    mime="application/zip"
-                                )
-                            else:
-                                st.info("Nenhum arquivo foi encontrado para gerar o ZIP.")
-                        
-                    with col2:
-                        st.download_button(
-                            label="📥 Baixar Relatório Excel das NF disponiveis no Galpão",
-                            data=to_excel(df_cliente_pendentes,df_clientes_entregues),
-                            file_name="relatorio_notas_bolao.xlsx",
-                            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                        )
-                       
-            with tab2:
+            df_filtrado_pendentes, df_filtrado_entregues = gerar_dataframe_p_e()
+            st.header("Filtros:")
+            interface_filtros_pendentes(df_filtrado_pendentes, "data_painelcliente_pendentes", "fornecedor_painelcliente_pendentes", "nf_painelcliente_pendentes")
+            df_cliente_pendentes, df_clientes_entregues = gerar_dataframe_p_e()   
+            botoes_excel_pdf(df_filtrado_pendentes,df_cliente_pendentes, df_clientes_entregues)             
+            with enviadas:
                 st.write("Acesse as notas fiscais das cargas já entregues e baixe os PDFs quando necessário.")           
                 st.header("Filtros:")
-                col1,col2,col3 = st.columns(3)
-                with col1:
-                    df_filtrado_entregues = df_clientes_entregues.copy()
-                    
-                    datas_unicas = df_filtrado_entregues["DT_RECEBIMENTO"].unique().tolist()
-                    dt_recebimento_select = st.multiselect("Data Recebimento", datas_unicas, key="filtro_data")
-                if dt_recebimento_select:
-                        df_filtrado_entregues = df_filtrado_entregues[df_filtrado_entregues["DT_RECEBIMENTO"].isin(dt_recebimento_select)]
-                with col2:
-                    fornecedor_unicos = ["-"] + df_filtrado_entregues["FORNECEDOR"].unique().tolist()
-                    fornecedor_select = st.selectbox("Fornecedor:", fornecedor_unicos)
-                if fornecedor_select:
-                    if "-" in fornecedor_select:
-                        pass
-                    else:
-                        df_filtrado_entregues = df_filtrado_entregues[df_filtrado_entregues["FORNECEDOR"] == fornecedor_select]
-                with col3:
-                    nf_unicas = ["-"] + df_filtrado_entregues["N_NF"].unique().tolist()
-                    nf_select = st.selectbox("NF'S:", nf_unicas)
-                if nf_select:
-                    if "-" in nf_select:
-                        pass
-                    else:
-                      df_filtrado_entregues = df_filtrado_entregues[df_filtrado_entregues["N_NF"] == nf_select]  
-                    
-                if df_filtrado_entregues is not None and not df_filtrado_entregues.empty:
-                    df_filtrado_entregues_exibicao = df_filtrado_entregues.copy()
-                    df_filtrado_entregues_exibicao = df_filtrado_entregues_exibicao.rename(
-                        columns={
-                            "DT_RECEBIMENTO" : "DATA RECEBIMENTO",
-                            "N_NF" : "NOTA FISCAL",
-                            "CHAVE_NF" : "CHAVE DA NOTA FISCAL",
-                            "STATUS" : "STATUS DE ENVIO",
-                            "DATA_ENVIO" : "DATA DE ENTREGA"
-                         }
-                    )
-                    df_filtrado_entregues_exibicao = df_filtrado_entregues_exibicao.set_index("DATA RECEBIMENTO") 
-                    st.dataframe(df_filtrado_entregues_exibicao[[ "NOTA FISCAL", "FORNECEDOR", "PESO", "CHAVE DA NOTA FISCAL", "STATUS DE ENVIO", "DATA DE ENTREGA"]], use_container_width=True)
-                else:
-                    st.info("📢 Nenhuma carga entregue registrada até o momento.")  
+                interface_filtros_entregues(df_filtrado_entregues, "data_painelcliente_entregues", "fornecedor_painelcliente_entregues", "nf_painelcliente_entregues", "status_painelcliente_entregues", "dt_envio_visaocliente_entregues")
